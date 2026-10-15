@@ -48,11 +48,13 @@ docs/             plan, architecture, design docs
 - No new dependencies without a stated reason (the platform or a few lines usually suffice).
 - Original IP only: no StarCraft names, units, factions, sounds, or assets.
 
-## Adding content (to be refined once `src/data` contracts land in stage 1)
+## Adding content
 
-- **Tower:** add a definition in `src/data` (cost, range, damage, damage type, fire rate, upgrades); add/extend sim tests if it introduces new behaviour; add a model in `src/render`.
-- **Enemy:** add a definition in `src/data` (hp, armor, armor type, speed, bounty); reference it from wave data; add a model in `src/render`.
-- **Map:** add a definition in `src/data` (grid, buildable tiles, path/waypoints, waves per difficulty); it appears on the home screen map list.
+Design rules: `docs/GDD.md`. Types: `src/data/types.ts`. Sim contract: `src/sim/types.ts`. `src/data/data.test.ts` validates all of it.
+
+- **Tower:** add the id to `TowerId` in `src/data/types.ts`, a `TowerDef` (3 levels: base + 2 upgrades, full stats per level) to `TOWERS` and `TOWER_LIST` in `src/data/towers.ts`, a row in GDD §3; add sim tests if it needs new behaviour (new `Delivery` or stat); add a model in `src/render`.
+- **Enemy:** add the id to `EnemyId`, an `EnemyDef` to `ENEMIES` in `src/data/enemies.ts` (new ability = new `EnemyAbility` variant + sim support + test), a row in GDD §4; reference it from wave groups; add a model in `src/render`.
+- **Map:** add the id to `MapId`, a file `src/data/maps/<id>.ts` (ASCII `layout` + `parseLayout`, `paths` as `[col,row]` waypoints spawn -> core, `waves` built with `g(...)`, palette, `hpGrowth`, `startingCash`), register it in `MAPS` and `MAP_LIST` in `src/data/maps/index.ts`, add its expected wave count/mid boss to `data.test.ts`, a row in GDD §7–8. It appears on the home screen via `MAP_LIST`.
 
 ## Testing
 
