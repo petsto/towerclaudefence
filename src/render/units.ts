@@ -1,12 +1,13 @@
 // Syncs sim towers/enemies into atlas sprites (./hd): tower = static base frame + turret yaw frame, enemy = heading ×
-// walk-phase frame. Per-sprite hit flash, slow tint, shield shimmer and build/sell/upgrade pops. HP/shield bars live in
+// walk-phase frame. Tremor Mines = the static mine frame, in their own sprite batch in the world pass so they always lie
+// under the units. Per-sprite hit flash, slow tint, shield shimmer and build/sell/upgrade pops. HP/shield bars live in
 // the overlay layer, drawn over the sprites; in a clump only the leader's bar shows (enemies earlier in the sim list
 // are further along).
 import * as THREE from 'three';
 import type { EnemyId } from '../data/types';
 import type { GameState, TowerState } from '../sim/types';
 import { PITCH } from './camera';
-import { createSprites, enemyFrame, TOWER_BASE, towerFrame, towerKey, type Atlas, type SpriteItem } from './hd';
+import { createSprites, enemyFrame, MINE_KEY, TOWER_BASE, towerFrame, towerKey, type Atlas, type SpriteItem } from './hd';
 import type { Interp } from './interp';
 import { OVERLAY_LAYER } from './view';
 
@@ -23,6 +24,8 @@ const SELL_S = 0.35;
 const UPGRADE_S = 0.35;
 const TURN_RATE = 18; // 1/s, exponential ease of turret yaw toward the sim's (snapped) rotation
 const SPRITE_CAP = 1024; // 2 per tower + 1 per enemy
+const MINE_CAP = 128;
+const PLANT_S = 0.3;
 
 export interface Units {
   /** Unit sprites: drawn after the world pass, before the overlay layer. */
@@ -56,6 +59,12 @@ const easeOutBack = (k: number): number => 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1
 export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, topAt: (col: number, row: number) => number): Units {
   const sprites = createSprites(atlas, SPRITE_CAP);
   const list: SpriteItem[] = [];
+  // ponytail: mines have no cap in the sim; past MINE_CAP armed at once the extras just don't draw
+  const mineSprites = createSprites(atlas, MINE_CAP);
+  mineSprites.mesh.renderOrder = 4; // world pass: after the ground decals, before hover/range
+  scene.add(mineSprites.mesh);
+  const mineList: SpriteItem[] = [];
+  const minePlanted = new Map<number, { at: number; seen: number }>();
   const towers = new Map<number, TowerAnim>();
   const enemies = new Map<number, EnemyAnim>();
   const stride = new Map<EnemyId, number>();
@@ -198,6 +207,19 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
     if (bars.instanceColor) bars.instanceColor.needsUpdate = true;
   }
 
+  function syncMines(state: GameState): void {
+    mineList.length = 0;
+    for (const m of state.mines) {
+      let a = minePlanted.get(m.id);
+      if (!a) minePlanted.set(m.id, (a = { at: clock, seen: frame }));
+      a.seen = frame;
+      const k = Math.min(1, (clock - a.at) / PLANT_S);
+      mineList.push({ x: m.x, y: topAt(m.col, m.row), z: m.y, key: MINE_KEY, frame: TOWER_BASE, order: 0, scale: Math.max(0.05, easeOutBack(k)) });
+    }
+    for (const [id, a] of minePlanted) if (a.seen !== frame) minePlanted.delete(id);
+    mineSprites.set(mineList, clock);
+  }
+
   return {
     sprites: sprites.mesh,
     spriteDepth: sprites.depth,
@@ -208,6 +230,7 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
       syncTowers(state, frameDt);
       syncEnemies(state, frameDt);
       sprites.set(list, clock);
+      syncMines(state);
     },
     towerPosition(id) {
       const a = towers.get(id);
@@ -218,6 +241,11 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
       (sprites.mesh.material as THREE.Material).dispose();
       sprites.depth.dispose();
       sprites.mesh.dispose();
+      scene.remove(mineSprites.mesh);
+      mineSprites.mesh.geometry.dispose();
+      (mineSprites.mesh.material as THREE.Material).dispose();
+      mineSprites.depth.dispose();
+      mineSprites.mesh.dispose();
       bars.dispose();
       barGeo.dispose();
       barMat.dispose();

@@ -1,11 +1,13 @@
 // FX + SFX bench: the real renderer, sim and FX on Dust Ridge, played by the competent bot on Recruit,
-// plus buttons that fire every effect and sound on demand. Not shipped.
+// plus buttons that fire every effect and sound on demand. Command powers run on fake mines/fields/strikes merged into
+// the state the FX and renderer see, so they work without the sim's usePower. `?mute` starts muted. Not shipped.
 import { createSfx } from '../src/audio/sfx';
 import { ENEMIES, MAPS, TOWER_LIST } from '../src/data';
 import type { EnemyId } from '../src/data/types';
 import { createRenderer } from '../src/render';
 import { createFx } from '../src/render/fx';
-import { FIXED_DT, type SimEvent } from '../src/sim';
+import { POWERS } from '../src/data';
+import { FIXED_DT, type GameState, type MineState, type SimEvent, type StrikeState, type TremorFieldState } from '../src/sim';
 import { competentStrategy } from '../src/sim/autoplay';
 import { createSim } from '../src/sim/game';
 
@@ -13,6 +15,7 @@ const map = MAPS['dust-ridge-outpost'];
 const renderer = createRenderer(document.getElementById('view')!, map);
 const fx = createFx(renderer.scene, renderer.interp, map);
 const sfx = createSfx();
+if (new URLSearchParams(location.search).has('mute')) sfx.setMuted(true);
 const { game, state } = createSim({ mapId: map.id, difficultyId: 'easy' });
 const bot = competentStrategy();
 const manual: SimEvent[] = [];
@@ -59,6 +62,76 @@ btn('waveClear', () => push({ type: 'waveClear', index: 0, bonus: 0 }));
 btn('victory', () => push({ type: 'gameOver', result: 'victory' }));
 btn('defeat', () => push({ type: 'gameOver', result: 'defeat' }));
 
+// ---------------- command powers on fake state (GDD §14)
+const M = POWERS.tremor_mines, L = POWERS.lance_strike;
+type Mut<T> = { -readonly [K in keyof T]: T[K] };
+const fake = { mines: [] as MineState[], fields: [] as Mut<TremorFieldState>[], strikes: [] as Mut<StrikeState>[] };
+let fakeId = 1000;
+// path tiles nearest P first, so mines land on the lane by the bench point
+const lane = map.tiles.flatMap((row, r) => row.flatMap((t, c) => (t === 'path' ? [{ col: c, row: r }] : [])))
+  .sort((a, b) => Math.hypot(a.col + 0.5 - P.x, a.row + 0.5 - P.y) - Math.hypot(b.col + 0.5 - P.x, b.row + 0.5 - P.y));
+function plant(): void {
+  const t = lane.find((l) => !fake.mines.some((m) => m.col === l.col && m.row === l.row));
+  if (!t) return;
+  const m = { id: fakeId++, col: t.col, row: t.row, x: t.col + 0.5, y: t.row + 0.5 };
+  fake.mines.push(m);
+  push({ type: 'minePlanted', mineId: m.id, col: m.col, row: m.row, x: m.x, y: m.y });
+}
+function trigger(): void {
+  const m = fake.mines.shift();
+  if (!m) return;
+  fake.fields.push({ id: m.id, x: m.x, y: m.y, radius: M.fieldRadius, timeLeft: M.fieldDuration });
+  push({ type: 'mineTriggered', mineId: m.id, x: m.x, y: m.y, radius: M.fieldRadius });
+}
+function strike(col = Math.floor(P.x), row = Math.floor(P.y)): void {
+  const s: Mut<StrikeState> = { id: fakeId++, col, row, x: col + 0.5, y: row + 0.5, radius: L.radius, phase: 'telegraph', timeLeft: L.telegraph };
+  fake.strikes.push(s);
+  push({ type: 'strikeTelegraph', strikeId: s.id, x: s.x, y: s.y, radius: s.radius, delay: L.telegraph });
+}
+/** Same timeline as the sim: telegraph, then pulses every pulseInterval (index 0 = impact) until pulses × interval. */
+function stepFake(dt: number): void {
+  for (const f of fake.fields) f.timeLeft -= dt;
+  fake.fields = fake.fields.filter((f) => f.timeLeft > 0);
+  const fire = L.pulses * L.pulseInterval;
+  for (const s of fake.strikes) {
+    const k0 = s.phase === 'firing' ? Math.floor((fire - s.timeLeft) / L.pulseInterval) : -1; // last pulse already fired
+    s.timeLeft -= dt;
+    if (s.phase === 'telegraph' && s.timeLeft <= 0) Object.assign(s, { phase: 'firing', timeLeft: fire + s.timeLeft });
+    if (s.phase !== 'firing') continue;
+    const k1 = Math.floor((fire - s.timeLeft) / L.pulseInterval);
+    for (let i = k0 + 1; i <= Math.min(k1, L.pulses - 1); i++) push({ type: 'strikePulse', strikeId: s.id, x: s.x, y: s.y, radius: s.radius, index: i });
+  }
+  fake.strikes = fake.strikes.filter((s) => s.phase === 'telegraph' || s.timeLeft > 0);
+}
+const view = (): GameState => ({
+  ...state,
+  mines: [...state.mines, ...fake.mines],
+  tremorFields: [...state.tremorFields, ...fake.fields],
+  strikes: [...state.strikes, ...fake.strikes],
+});
+section('powers (fake state; freeze with sim off)');
+btn('mine plant', plant);
+btn('mine trigger', trigger);
+btn('lance strike', () => strike());
+btn('6 fields + strike (perf)', () => {
+  for (let i = 0; i < 6; i++) plant();
+  for (let i = 0; i < 6; i++) trigger();
+  strike();
+});
+btn('ready: mines 1', () => push({ type: 'powerReady', power: 'tremor_mines', charges: 1 }));
+btn('ready: mines 2 (silent)', () => push({ type: 'powerReady', power: 'tremor_mines', charges: 2 }));
+btn('ready: lance', () => push({ type: 'powerReady', power: 'lance_strike', charges: 1 }));
+const preview = (kind: 'mine' | 'strike' | null, valid: boolean) => () => {
+  const t = lane[0]!;
+  renderer.setHover(kind ? t : null, valid);
+  renderer.setRangePreview(kind ? { x: t.col + 0.5, y: t.row + 0.5, rangeTiles: kind === 'mine' ? M.fieldRadius : L.radius, kind } : null);
+};
+btn('preview mine', preview('mine', true));
+btn('preview mine ✗', preview('mine', false));
+btn('preview strike', preview('strike', true));
+btn('preview strike ✗', preview('strike', false));
+btn('preview off', preview(null, true));
+
 // ---------------- loop (same shape as src/main.ts)
 let last = performance.now();
 let acc = 0;
@@ -74,11 +147,13 @@ function frame(now: number): void {
     game.step();
   }
   renderer.interp.alpha = acc / FIXED_DT;
+  if (running) stepFake(dt);
+  const s = view();
   const events = [...game.drainEvents(), ...manual.splice(0)];
-  fx.handle(events, state);
+  fx.handle(events, s);
   sfx.play(events);
   fx.update(running ? dt : 0);
-  renderer.render(state, dt);
-  Object.assign(window, { __drawCalls: renderer.info.render.calls });
+  renderer.render(s, dt);
+  Object.assign(window, { __drawCalls: renderer.info.render.calls, __renderer: renderer, __sfx: sfx, __fx: { plant, trigger, strike } });
 }
 requestAnimationFrame(frame);

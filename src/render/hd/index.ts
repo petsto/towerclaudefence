@@ -26,6 +26,7 @@ import { choirMother } from './enemies/choir_mother';
 import { anvilTread } from './enemies/anvil_tread';
 import { foundryColossus } from './enemies/foundry_colossus';
 import { huskCrawler } from './enemies/husk_crawler';
+import { mine } from './mine';
 import { menderUnit } from './enemies/mender_unit';
 import { rivetWalker } from './enemies/rivet_walker';
 import { spindleDrone } from './enemies/spindle_drone';
@@ -65,7 +66,12 @@ export const enemyEntry = (id: EnemyId): BakeEntry => ({
   key: id, tower: false, builds: Array.from({ length: WALK }, (_, w) => enemyBuilt(id, w)),
 });
 
+/** Tremor Mine (static: base frame only). Sprite key = MINE_KEY. */
+export const MINE_KEY = 'mine';
+export const mineEntry = (): BakeEntry => ({ key: MINE_KEY, tower: true, builds: [cached(MINE_KEY, mine)] });
+
 export type { Built, Level, MatId, Part } from './kit';
+export { MINE_LED } from './mine';
 export { makeMaterials } from './materials';
 export * from './sprites';
 

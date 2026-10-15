@@ -1,7 +1,7 @@
 // WebAudio-synthesised SFX. No asset files. One lazily created AudioContext, resumed on the first
 // user gesture; events arriving before that are dropped. Throttled per sound + global voice cap,
 // then a compressor so a 40-enemy wave doesn't clip.
-import { ENEMIES } from '../data';
+import { ENEMIES, POWERS } from '../data';
 import type { TowerId } from '../data/types';
 import type { SimEvent } from '../sim/types';
 
@@ -14,7 +14,8 @@ export interface Sfx {
 type SoundId =
   | 'gun' | 'mortar' | 'rail' | 'missile' | 'zap' | 'stasis' | 'explosion' | 'shieldHit' | 'shieldBreak'
   | 'squelch' | 'squelchBig' | 'clank' | 'clankBig' | 'leak' | 'klaxon' | 'chime' | 'victory' | 'defeat'
-  | 'build' | 'upgrade' | 'sell' | 'siren';
+  | 'build' | 'upgrade' | 'sell' | 'siren'
+  | 'ready' | 'minePlant' | 'mineTrigger' | 'telegraph' | 'lanceBoom' | 'lanceHum';
 
 const MASTER = 0.4;
 const MAX_VOICES = 18;
@@ -23,9 +24,12 @@ const COOLDOWN: Readonly<Record<SoundId, number>> = {
   gun: 0.045, mortar: 0.12, rail: 0.1, missile: 0.08, zap: 0.1, stasis: 0.18, explosion: 0.07,
   shieldHit: 0.07, shieldBreak: 0.1, squelch: 0.06, squelchBig: 0.2, clank: 0.06, clankBig: 0.2,
   leak: 0.5, klaxon: 1, chime: 0.5, victory: 2, defeat: 2, build: 0.05, upgrade: 0.05, sell: 0.05, siren: 2,
+  ready: 0.3, minePlant: 0.05, mineTrigger: 0.08, telegraph: 0.5, lanceBoom: 0.5, lanceHum: 0.1,
 };
 /** UI / game-state cues bypass the voice cap. */
-const PRIORITY = new Set<SoundId>(['leak', 'klaxon', 'siren', 'chime', 'victory', 'defeat', 'build', 'upgrade', 'sell']);
+const PRIORITY = new Set<SoundId>([
+  'leak', 'klaxon', 'siren', 'chime', 'victory', 'defeat', 'build', 'upgrade', 'sell', 'ready', 'minePlant', 'telegraph', 'lanceBoom',
+]);
 /** Arc Coil has none: it sounds on its 'chain' event. */
 const SHOT: Readonly<Partial<Record<TowerId, SoundId>>> = {
   picket: 'gun', thumper: 'mortar', stasis: 'stasis', longshot: 'rail', breacher: 'missile',
@@ -183,6 +187,63 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
     return 0.12;
   },
   upgrade: (ac, out, t) => notes(ac, out, t, 'square', [440, 660, 990], 0.05, 0.06, 0.1),
+  // command powers (GDD §14)
+  // ready: two-tone console chirp (low-high, twice), square + filtered; distinct from the triangle wave-clear chime
+  ready: (ac, out, t) => {
+    const lp = lowpass(ac, out, t, 3200);
+    return notes(ac, lp, t, 'square', [1175, 1760, 1175, 1760], 0.065, 0.05, 0.13);
+  },
+  // mine plant: a dull clunk, then a short arming beep
+  minePlant: (ac, out, t, nb) => {
+    noise(ac, nb, t, 0.06, env(ac, out, t, 0.5, 0.002, 0.06), 'lowpass', 1200, 300, 2);
+    osc(ac, 'square', 140, 70, t, 0.07, env(ac, out, t, 0.2, 0.002, 0.07));
+    osc(ac, 'sine', 1980, 1980, t + 0.13, 0.06, env(ac, out, t + 0.13, 0.12, 0.003, 0.06));
+    return 0.21;
+  },
+  // mine trigger: sub thump with a warble (slow FM on the body), plus a low rumble
+  mineTrigger: (ac, out, t, nb) => {
+    const o = osc(ac, 'sine', jit(75, 0.05), 32, t, 0.6, env(ac, out, t, 1, 0.004, 0.6));
+    const lfo = ac.createOscillator();
+    const depth = ac.createGain();
+    lfo.frequency.value = 9;
+    depth.gain.value = 12;
+    lfo.connect(depth).connect(o.frequency);
+    lfo.start(t);
+    lfo.stop(t + 0.62);
+    noise(ac, nb, t, 0.45, env(ac, out, t, 0.4, 0.01, 0.45), 'lowpass', 500, 90, 1);
+    return 0.62;
+  },
+  // Lance telegraph: rising filtered whine over the telegraph, with targeting ticks that speed up
+  telegraph: (ac, out, t, nb) => {
+    const d = POWERS.lance_strike.telegraph;
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.12, t + d * 0.9);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.05);
+    g.connect(out);
+    const lp = lowpass(ac, g, t, 600, 4000, d);
+    osc(ac, 'sawtooth', 220, 1400, t, d, lp);
+    osc(ac, 'sine', 440, 2800, t, d, g);
+    for (let k = 0, at = 0; at < d - 0.05; k++, at += Math.max(0.06, 0.22 * 0.85 ** k)) {
+      noise(ac, nb, t + at, 0.012, env(ac, out, t + at, 0.3, 0.001, 0.012), 'highpass', 4500);
+    }
+    return d + 0.05;
+  },
+  // Lance pulse 0: deep boom (sub drop + long filtered blast)
+  lanceBoom: (ac, out, t, nb) => {
+    osc(ac, 'sine', 70, 22, t, 1.1, env(ac, out, t, 1, 0.004, 1.1));
+    noise(ac, nb, t, 1.2, env(ac, out, t, 0.9, 0.003, 1.2), 'lowpass', 3500, 90, 0.8);
+    noise(ac, nb, t, 0.5, env(ac, out, t, 0.2, 0.002, 0.5), 'highpass', 5000, 2000);
+    return 1.22;
+  },
+  // later pulses: a sizzling hum (detuned saw drone + crackle)
+  lanceHum: (ac, out, t, nb) => {
+    const lp = lowpass(ac, env(ac, out, t, 0.14, 0.02, 0.42), t, 1800, 700, 0.44);
+    osc(ac, 'sawtooth', 110, 104, t, 0.44, lp);
+    osc(ac, 'sawtooth', 165.5, 160, t, 0.44, lp);
+    noise(ac, nb, t, 0.4, env(ac, out, t, 0.18, 0.01, 0.38), 'bandpass', 6000, 3500, 4);
+    return 0.46;
+  },
   sell: (ac, out, t, nb) => {
     noise(ac, nb, t, 0.01, env(ac, out, t, 0.4, 0.001, 0.01), 'highpass', 2000);
     osc(ac, 'square', 620, 280, t, 0.1, env(ac, out, t, 0.1, 0.003, 0.1));
@@ -232,13 +293,11 @@ function soundFor(ev: SimEvent): SoundId | null {
     case 'upgrade': return 'upgrade';
     case 'sell': return 'sell';
     case 'spawn': return null;
-    // phase 2 (audio, GDD §14): powerReady (charges === 1), minePlanted, mineTriggered, strikeTelegraph, strikePulse
-    case 'powerReady':
-    case 'minePlanted':
-    case 'mineTriggered':
-    case 'strikeTelegraph':
-    case 'strikePulse':
-      return null;
+    case 'powerReady': return ev.charges === 1 ? 'ready' : null; // cue only when it just became usable
+    case 'minePlanted': return 'minePlant';
+    case 'mineTriggered': return 'mineTrigger';
+    case 'strikeTelegraph': return 'telegraph';
+    case 'strikePulse': return ev.index === 0 ? 'lanceBoom' : 'lanceHum';
   }
 }
 

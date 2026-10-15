@@ -1,14 +1,15 @@
-// Transient VFX driven by SimEvents + live projectiles. Everything is pooled with fixed caps and
-// drawn in 11 batched draw calls (2 Points, 1 fat LineSegments2, 8 InstancedMesh). No allocation per event.
+// Transient VFX driven by SimEvents + live projectiles, plus the command powers drawn from state (tremor fields, Lance
+// reticle + beam; mine LEDs). Everything is pooled with fixed caps and drawn in 16 batched draw calls (2 Points, 1 fat
+// LineSegments2, 13 InstancedMesh). No allocation per event.
 // World: 1 unit = 1 tile, +Y up, sim (x, y) -> world (x, ?, y).
 import * as THREE from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { ENEMIES } from '../data';
+import { ENEMIES, POWERS } from '../data';
 import type { DamageType, EnemyId, MapDef, TowerId } from '../data/types';
 import type { GameState, SimEvent } from '../sim/types';
-import { bounds, enemyBuilt, TOWER_YAW, towerBuilt, towerFrame } from './hd';
+import { bounds, enemyBuilt, MINE_LED, TOWER_YAW, towerBuilt, towerFrame } from './hd';
 import type { Interp } from './interp';
 import { OVERLAY_LAYER } from './view';
 import { PAD_Y, PATH_Y } from './hd/terrain/build';
@@ -85,6 +86,8 @@ function enemyHeight(defId: EnemyId | undefined): number {
   return defId ? PATH_Y + dims(defId).h * 0.6 : 0.3;
 }
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
+const BEAM_H = 16; // Lance column height (world units): runs off the top of the view
+const SCORCH_FADE = 10; // s the scorch takes to fade once the beam is gone
 
 // ---------------------------------------------------------------- particles (Points, 1 draw each)
 
@@ -436,6 +439,141 @@ function boltSystem(cap: number, maxVerts: number) {
   return { object: lines, start, point, update };
 }
 
+// ---------------------------------------------------------------- shader decals (command powers)
+
+// One instanced quad per decal, drawn from state each frame. vP = quad position, -1..1; vD = 4 floats per instance.
+const DECAL_VS = /* glsl */ `
+attribute vec4 aD;
+varying vec2 vP;
+varying vec4 vD;
+void main() {
+  vP = uv * 2.0 - 1.0;
+  vD = aD;
+  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+}`;
+/** Tremor field (additive), vD = (age s, alpha): faint tint, rim, and a ripple running out every 0.5 s. */
+const FIELD_FS = /* glsl */ `
+uniform vec3 uCol;
+varying vec2 vP;
+varying vec4 vD;
+void main() {
+  float r = length(vP);
+  if (r > 1.0) discard;
+  float rim = smoothstep(0.86, 0.95, r) * (1.0 - smoothstep(0.96, 1.0, r));
+  float rp = fract(vD.x * 2.0);
+  float rip = exp(-pow((r - rp) * 11.0, 2.0)) * (1.0 - 0.6 * rp);
+  float a = 0.1 * (1.0 - 0.5 * r) + 0.7 * rim + 0.38 * rip;
+  gl_FragColor = vec4(uCol, a * vD.y);
+  #include <colorspace_fragment>
+}`;
+/**
+ * Lance reticle (additive; quad = 1.6 × radius), vD = (telegraph progress 0..1, spin, centre blink 0..1, white flash 0..1).
+ * Ring + counter-spinning ticks at the radius, triangle corner brackets closing in from 1.55× to the ring.
+ */
+const RETICLE_FS = /* glsl */ `
+uniform vec3 uCol;
+varying vec2 vP;
+varying vec4 vD;
+float line(float d, float w) { return 1.0 - smoothstep(w * 0.5, w, d); }
+void main() {
+  vec2 q = vP * 1.6;
+  float r = length(q);
+  float k = vD.x;
+  float s = mix(1.55, 1.0, 1.0 - pow(1.0 - k, 3.0));
+  float w = 0.04;
+  float a = line(abs(r - 1.0), w * 0.8) * (0.35 + 0.35 * k);
+  float ang = atan(q.y, q.x) + vD.y;
+  a += line(abs(fract(ang / 0.5236 + 0.5) - 0.5) * 0.5236 * r, w * 0.8) * step(abs(r - 1.08), 0.05) * 0.6;
+  for (int i = 0; i < 3; i++) {
+    float t = -vD.y * 0.6 + 1.5708 + float(i) * 2.0944;
+    vec2 n = -vec2(cos(t), sin(t));
+    float u = abs(dot(q, vec2(-n.y, n.x))) / (s * 0.866);
+    a += line(abs(dot(q, n) - s * 0.5), w * 1.15) * step(0.55, u) * step(u, 1.0);
+  }
+  a += (1.0 - smoothstep(0.06, 0.09, r)) * vD.z;
+  a += (line(abs(q.x), w) * step(abs(q.y), 0.2) + line(abs(q.y), w) * step(abs(q.x), 0.2)) * step(0.12, r) * 0.6;
+  a += (1.0 - smoothstep(0.0, 0.5, r)) * vD.w * 0.5;
+  gl_FragColor = vec4(mix(uCol, vec3(1.0), vD.w), min(a, 1.0) * (0.75 + 0.25 * vD.w));
+  #include <colorspace_fragment>
+}`;
+/** Lance scorch (normal blend), vD = (age s, alpha, seed): glassy black blot, irregular rim, molten centre while hot. */
+const SCORCH_FS = /* glsl */ `
+varying vec2 vP;
+varying vec4 vD;
+void main() {
+  float r = length(vP);
+  if (r > 1.0) discard;
+  float th = atan(vP.y, vP.x);
+  float sd = vD.z;
+  float edge = 0.8 + 0.08 * sin(th * 5.0 + sd) + 0.05 * sin(th * 11.0 + sd * 2.3) + 0.03 * sin(th * 23.0 + sd * 4.1);
+  float a = 0.8 * (1.0 - smoothstep(edge * 0.5, edge, r)) + 0.25 * (1.0 - smoothstep(edge, 1.0, r));
+  vec3 col = vec3(0.035, 0.03, 0.04);
+  float glint = pow(0.5 + 0.5 * sin(r * 22.0 + sd + sin(th * 5.0 + sd) * 0.5 * r), 14.0) * smoothstep(0.2, 0.4, r) * (1.0 - r);
+  col += vec3(0.25, 0.3, 0.42) * glint * 0.4;
+  float heat = (1.0 - smoothstep(3.0, 5.5, vD.x)) * (1.0 - smoothstep(0.0, 0.55, r));
+  col = mix(col, vec3(1.0, 0.5, 0.18), heat * 0.8);
+  gl_FragColor = vec4(col, max(a, heat) * vD.y);
+  #include <colorspace_fragment>
+}`;
+/**
+ * Lance column (additive, vertical quad facing the camera: no yaw, so its x is screen x), vD = (intensity, core, time).
+ * Steel-blue/violet glow across the full width, white-hot core in the middle third, fading out toward orbit.
+ */
+const BEAM_FS = /* glsl */ `
+uniform vec3 uGlow;
+uniform vec3 uRim;
+varying vec2 vP;
+varying vec4 vD;
+void main() {
+  float d = abs(vP.x);
+  float h = vP.y * 0.5 + 0.5;
+  float shimmer = 0.85 + 0.15 * sin(h * 70.0 - vD.z * 45.0);
+  float glow = pow(1.0 - d, 2.2);
+  float core = 1.0 - smoothstep(0.16, 0.34, d);
+  vec3 col = mix(uRim, uGlow, 1.0 - d) * glow * 0.4 + vec3(core * vD.y * 0.85);
+  float base = smoothstep(0.0, 0.012, h); // soft foot: the ground glow decal carries the contact
+  gl_FragColor = vec4(col * vD.x * shimmer * base * (1.0 - smoothstep(0.35, 1.0, h)), 1.0);
+  #include <colorspace_fragment>
+}`;
+
+/** Lance ground glow (additive), vD = (intensity): soft steel-blue pool of light at the column's foot. */
+const FOOT_FS = /* glsl */ `
+uniform vec3 uCol;
+varying vec2 vP;
+varying vec4 vD;
+void main() {
+  float r = length(vP);
+  if (r > 1.0) discard;
+  float a = exp(-r * r * 5.0) * (1.0 - r) + exp(-r * r * 40.0);
+  gl_FragColor = vec4(mix(uCol, vec3(1.0), exp(-r * r * 30.0)), a * vD.x);
+  #include <colorspace_fragment>
+}`;
+
+function decalSystem(cap: number, geo: THREE.BufferGeometry, fs: string, uniforms: Record<string, THREE.IUniform>, blending: THREE.Blending, depthTest = true) {
+  const aD = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute('aD', aD);
+  const mat = new THREE.ShaderMaterial({ vertexShader: DECAL_VS, fragmentShader: fs, uniforms, transparent: true, depthWrite: false, depthTest, blending });
+  const mesh = new THREE.InstancedMesh(geo, mat, cap);
+  mesh.frustumCulled = false;
+  mesh.count = 0;
+  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  let n = 0;
+  return {
+    object: mesh,
+    begin(): void { n = 0; },
+    /** sx/sy: scale of the unit quad (ground decals: radius, radius). */
+    push(x: number, y: number, z: number, sx: number, sy: number, a: number, b = 0, c = 0, d = 0): void {
+      if (n >= cap) return;
+      mesh.setMatrixAt(n, _m.compose(_p.set(x, y, z), _q.identity(), _s.set(sx, sy, sx)));
+      aD.setXYZW(n++, a, b, c, d);
+    },
+    end(): void {
+      mesh.count = n;
+      mesh.instanceMatrix.needsUpdate = aD.needsUpdate = true;
+    },
+  };
+}
+
 // ---------------------------------------------------------------- geometry helpers
 
 function splatGeometry(): THREE.BufferGeometry {
@@ -505,18 +643,45 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
 
   const delayed = Array.from({ length: 16 }, () => ({ t: 0, x: 0, y: 0, r: 0 }));
 
+  // command powers: tremor fields, Lance reticle, scorch (ground decals) and the Lance column (overlay)
+  const flat = (): THREE.BufferGeometry => new THREE.PlaneGeometry(2, 2).rotateX(-Math.PI / 2);
+  const col3 = (c: THREE.Color): THREE.IUniform => ({ value: c.clone() });
+  const fields = decalSystem(32, flat(), FIELD_FS, { uCol: col3(COL.teal) }, THREE.AdditiveBlending);
+  const reticles = decalSystem(4, flat(), RETICLE_FS, { uCol: col3(COL.amber) }, THREE.AdditiveBlending, false);
+  const scorchFx = decalSystem(4, flat(), SCORCH_FS, {}, THREE.NormalBlending);
+  const feet = decalSystem(4, flat(), FOOT_FS, { uCol: col3(COL.shield) }, THREE.AdditiveBlending);
+  const beams = decalSystem(4, new THREE.PlaneGeometry(2, 1).translate(0, 0.5, 0), BEAM_FS, { uGlow: col3(COL.shield), uRim: col3(COL.violet) }, THREE.AdditiveBlending);
+  fields.object.renderOrder = 2;
+  scorchFx.object.renderOrder = 1;
+  reticles.object.renderOrder = 3;
+  feet.object.renderOrder = 3;
+  beams.object.renderOrder = 12;
+  const scorches = Array.from({ length: 4 }, () => ({ x: 0, y: 0, z: 0, age: 0, life: 0, seed: 0 }));
+  let scorchNext = 0;
+  const ripples = new Map<number, number>(); // field id -> last ripple index (dust kick per ripple)
+  let ledBeat = -1;
+
   const objects: THREE.Object3D[] = [
     splatMesh, slowMesh, debris.object, gibs.object, shellMesh, missileMesh,
     dust.object, rings.object, spheres.object, shards.object, glow.object, bolts.object,
+    scorchFx.object, fields.object, reticles.object, feet.object, beams.object,
   ];
   scene.add(...objects);
-  // airborne FX draw over the unit sprites; ground decals (splats, slow rings, shockwave rings) stay under them
-  for (const o of objects) if (o !== splatMesh && o !== slowMesh && o !== rings.object) o.layers.set(OVERLAY_LAYER);
+  // airborne FX draw over the unit sprites; ground decals (splats, slow rings, shockwave rings, power decals) stay under them
+  const ground: THREE.Object3D[] = [splatMesh, slowMesh, rings.object, scorchFx.object, fields.object, reticles.object, feet.object];
+  for (const o of objects) if (!ground.includes(o)) o.layers.set(OVERLAY_LAYER);
 
   let state: GameState | null = null;
   const end = map.paths[0]!.at(-1)!; // every path ends on the core (data.test.ts)
   const core = { x: end[0] + 0.5, y: end[1] + 0.5 };
   let time = 0;
+  /** Surface height of the tile under (x, y): path recess, pad, ground, raised decor (approx.). */
+  function topY(x: number, y: number): number {
+    const t = map.tiles[Math.floor(y)]?.[Math.floor(x)];
+    return t === 'path' || t === 'spawn' || t === 'core' ? PATH_Y : t === 'build' ? PAD_Y : t === 'decor' ? 0.45 : 0;
+  }
+  /** Flat ground decals sit just above the pads so they show on path, pads and open ground alike. */
+  const decalY = (x: number, y: number): number => Math.max(PAD_Y + 0.01, topY(x, y) + 0.01);
 
   // -------- lookups
 
@@ -713,6 +878,43 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
           rings.spawn(core.x, 0.05, core.y, 0.4, 2, 0.55, COL.red, COL.red, COL.darkRed);
           glow.burst(18, core.x, 0.4, core.y, 4, COL.white, COL.red, 0.12, 0.5, 5, 0.6);
           break;
+        case 'minePlanted': {
+          const y = PATH_Y + 0.03;
+          rings.spawn(ev.x, y, ev.y, 0.05, 0.4, 0.3, COL.white, COL.teal, COL.blue);
+          dust.burst(5, ev.x, 0.05, ev.y, 0.8, COL.dust, COL.dust, 0.14, 0.6, -0.3, 0.2, 2.5);
+          glow.burst(4, ev.x, 0.08, ev.y, 1, COL.amber, COL.orange, 0.05, 0.3, 4, 0.8);
+          break;
+        }
+        case 'mineTriggered': {
+          // ground thump out to the field radius, then a dust kick
+          const y = decalY(ev.x, ev.y);
+          rings.spawn(ev.x, y, ev.y, 0.15, ev.radius, 0.45, COL.white, COL.teal, COL.blue);
+          rings.spawn(ev.x, y, ev.y, 0.1, ev.radius * 0.7, 0.4, COL.teal, COL.teal, COL.blue, 0.12);
+          glow.spawn(ev.x, 0.15, ev.y, 0, 0, 0, COL.amber, COL.teal, 0.6, 0.4, 0.12, 0, 0);
+          dust.burst(14, ev.x, 0.08, ev.y, 2.2, COL.dust, COL.dust, 0.3, 1, -0.4, 0.25, 2.5);
+          for (let i = 0; i < 5; i++) debris.spawn(ev.x, 0.05, ev.y, 1.4, 0.05, i % 2 ? COL.dirt : COL.gunmetal, 1);
+          break;
+        }
+        case 'strikePulse': {
+          // beam impact: ground flash + shock ring; the first pulse also bursts debris and lays the scorch
+          const y = decalY(ev.x, ev.y);
+          const first = ev.index === 0;
+          rings.spawn(ev.x, y, ev.y, 0.3, ev.radius * (first ? 1.3 : 1), first ? 0.5 : 0.35, first ? COL.ice : COL.shield, COL.shield, COL.blue);
+          glow.spawn(ev.x, 0.2, ev.y, 0, 0, 0, COL.ice, COL.violet, first ? 1.4 : 0.9, 0.5, first ? 0.16 : 0.1, 0, 0);
+          glow.burst(first ? 24 : 10, ev.x, 0.2, ev.y, first ? 5 : 3.5, COL.white, COL.violet, 0.09, 0.45, 6, 0.6);
+          if (first) {
+            rings.spawn(ev.x, y, ev.y, 0.2, ev.radius * 1.05, 0.4, COL.shield, COL.blue, COL.black, 0.08);
+            dust.burst(16, ev.x, 0.2, ev.y, 2.6, COL.smoke, COL.smoke, 0.35, 1.1, -0.5, 0.5, 2.2);
+            for (let i = 0; i < 8; i++) debris.spawn(ev.x, 0.15, ev.y, 2.4, 0.06, i % 2 ? COL.dirt : COL.smoke, 1.4);
+            const sc = scorches[scorchNext]!;
+            scorchNext = (scorchNext + 1) % scorches.length;
+            const p = POWERS.lance_strike;
+            Object.assign(sc, { x: ev.x, y, z: ev.y, age: 0, life: p.pulses * p.pulseInterval + SCORCH_FADE, seed: rand(0, 6.3) });
+          }
+          break;
+        }
+        case 'strikeTelegraph': // reticle + thread come from state.strikes
+        case 'powerReady':
         case 'waveStart':
         case 'waveClear':
         case 'gameOver':
@@ -784,9 +986,73 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
     splatMesh.instanceMatrix.needsUpdate = true;
   }
 
+  /** Mines (LED blink), tremor fields and Lance strikes from state: they freeze with the sim while paused. */
+  function updatePowers(dt: number): void {
+    fields.begin();
+    feet.begin();
+    reticles.begin();
+    beams.begin();
+    scorchFx.begin();
+    if (state) {
+      // armed mines: amber LED, one blink per second (all in step)
+      const beat = Math.floor(time);
+      if (beat !== ledBeat) {
+        ledBeat = beat;
+        for (const m of state.mines) glow.spawn(m.x + MINE_LED.x, PATH_Y + MINE_LED.y, m.y + MINE_LED.z, 0, 0, 0, COL.amber, COL.orange, 0.13, 1, 0.45, 0, 0);
+      }
+      const M = POWERS.tremor_mines;
+      for (const f of state.tremorFields) {
+        const age = M.fieldDuration - f.timeLeft;
+        const open = 1 - (1 - Math.min(1, age / 0.25)) ** 3;
+        fields.push(f.x, decalY(f.x, f.y), f.y, f.radius * open, f.radius * open, age, Math.min(1, f.timeLeft / 1.5));
+        const rip = Math.floor(age * 2);
+        if (ripples.get(f.id) !== rip) {
+          ripples.set(f.id, rip);
+          for (let i = 0; i < 3; i++) {
+            const a = rand(0, Math.PI * 2), r = f.radius * rand(0.3, 0.9);
+            dust.spawn(f.x + Math.cos(a) * r, 0.05, f.y + Math.sin(a) * r, Math.cos(a) * 0.3, 0.35, Math.sin(a) * 0.3, COL.dust, COL.dust, 0.12, 2, 0.6, 0.4, 2);
+          }
+        }
+      }
+      if (ripples.size > state.tremorFields.length) for (const id of ripples.keys()) if (!state.tremorFields.some((f) => f.id === id)) ripples.delete(id);
+
+      const L = POWERS.lance_strike;
+      const fire = L.pulses * L.pulseInterval;
+      for (const s of state.strikes) {
+        const y0 = topY(s.x, s.y);
+        if (s.phase === 'telegraph') {
+          const k = 1 - s.timeLeft / L.telegraph;
+          const flash = s.timeLeft < 0.3 ? 1 - s.timeLeft / 0.3 : 0;
+          const blink = Math.sin(k * k * 40) > 0 ? 1 : 0.15; // faster as impact nears
+          reticles.push(s.x, decalY(s.x, s.y), s.y, s.radius * 1.6, s.radius * 1.6, k, k * 1.2, blink, flash);
+          beams.push(s.x, y0, s.y, 0.04 + 0.04 * flash, BEAM_H, (0.35 + 0.4 * k) * Math.min(1, k * 4), flash, time); // targeting thread
+        } else {
+          const t = fire - s.timeLeft;
+          const pulse = Math.exp(-(t % L.pulseInterval) * 7);
+          const w = Math.min(1, t / 0.08) * Math.min(1, s.timeLeft / 0.25);
+          beams.push(s.x, y0, s.y, 0.9 * (0.75 + 0.25 * w) * w, BEAM_H, 0.55 + 0.45 * pulse, 0.7 + 0.3 * pulse, time);
+          feet.push(s.x, decalY(s.x, s.y), s.y, (1.1 + 0.4 * pulse) * w, 1, 0.55 + 0.45 * pulse);
+          if (Math.random() < dt * 30) glow.spawn(s.x + rand(-0.3, 0.3), 0.1, s.y + rand(-0.3, 0.3), rand(-1.5, 1.5), rand(1, 2.5), rand(-1.5, 1.5), COL.white, COL.violet, 0.06, 0.3, 0.35, 5);
+        }
+      }
+    }
+    for (const sc of scorches) {
+      if (sc.life <= 0) continue;
+      sc.life -= dt;
+      sc.age += dt;
+      if (sc.life > 0) scorchFx.push(sc.x, sc.y - 0.005, sc.z, 1.5, 1.5, sc.age, Math.min(1, sc.life / SCORCH_FADE) * Math.min(1, sc.age / 0.1), sc.seed);
+    }
+    fields.end();
+    feet.end();
+    reticles.end();
+    beams.end();
+    scorchFx.end();
+  }
+
   function update(rawDt: number): void {
     const dt = Math.min(rawDt, 0.1);
     time += dt;
+    updatePowers(dt);
     for (const q of delayed) {
       if (q.t <= 0) continue;
       q.t -= dt;

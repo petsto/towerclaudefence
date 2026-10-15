@@ -10,7 +10,7 @@ import { ENEMIES, TOWER_LIST } from '../data';
 import type { EnemyId, MapDef } from '../data/types';
 import type { GameState } from '../sim/types';
 import { createCameraRig, DEFAULT_PPU } from './camera';
-import { bakeAtlas, enemyEntry, makeMaterials, towerEntry } from './hd';
+import { bakeAtlas, enemyEntry, makeMaterials, mineEntry, towerEntry } from './hd';
 import { createMapTerrain } from './hd/terrain/bake';
 import { createInterp, type Interp } from './interp';
 import { createUnits } from './units';
@@ -100,11 +100,37 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
   const ringMat = new THREE.LineBasicMaterial({ color: '#7ab0ff', depthTest: false });
   const discGeo = new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2);
   const discMat = new THREE.MeshBasicMaterial({ color: '#4a6f9a', transparent: true, opacity: 0.12, depthWrite: false, depthTest: false });
+  // power targeting extras (GDD §14): Lance reticle ticks + centre cross (unit radius, scale with the ring), and the mine's
+  // footprint (kept at its real size)
+  const tick: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const a = Math.PI / 2 + (i * Math.PI * 2) / 3;
+    const p = (r: number, da: number): number[] => [Math.cos(a + da) * r, 0, Math.sin(a + da) * r];
+    tick.push(...p(1, -0.14), ...p(0.8, 0), ...p(0.8, 0), ...p(1, 0.14), ...p(1, 0.14), ...p(1, -0.14));
+  }
+  tick.push(-0.08, 0, 0, 0.08, 0, 0, 0, 0, -0.08, 0, 0, 0.08);
+  const tickGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(tick, 3));
+  const reticle = new THREE.LineSegments(tickGeo, ringMat);
+  const footGeo = new THREE.RingGeometry(0.12, 0.17, 24).rotateX(-Math.PI / 2);
+  const footMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8, depthWrite: false, depthTest: false });
+  const foot = new THREE.Mesh(footGeo, footMat);
   const range = new THREE.Group();
-  range.add(new THREE.Mesh(discGeo, discMat), new THREE.LineLoop(ringGeo, ringMat));
+  range.add(new THREE.Mesh(discGeo, discMat), new THREE.LineLoop(ringGeo, ringMat), reticle, foot);
   range.visible = false;
   range.renderOrder = 6;
   range.children.forEach((c) => (c.renderOrder = 6));
+  let rangeKind: 'tower' | 'mine' | 'strike' = 'tower';
+  let hoverValid = true;
+  /** Tower: steel blue. Powers: teal (mine) / amber (strike), red when the hovered tile is invalid (setHover). */
+  const paintRange = (): void => {
+    const c = rangeKind === 'tower' ? '#7ab0ff' : !hoverValid ? '#ff3a2a' : rangeKind === 'mine' ? '#38e0d0' : '#ffb030';
+    ringMat.color.set(c);
+    footMat.color.set(c);
+    discMat.color.set(rangeKind === 'tower' ? '#4a6f9a' : c);
+    discMat.opacity = rangeKind === 'tower' ? 0.12 : 0.08;
+    reticle.visible = rangeKind === 'strike';
+    foot.visible = rangeKind === 'mine';
+  };
 
   const selGeo = new THREE.RingGeometry(0.44, 0.52, 24).rotateX(-Math.PI / 2);
   const selMat = new THREE.MeshBasicMaterial({ color: '#3cff6e' });
@@ -140,6 +166,7 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
   const entries = [
     ...TOWER_LIST.flatMap((t) => ([1, 2, 3] as const).map((lv) => towerEntry(t.id, lv))),
     ...mapEnemies(map).map(enemyEntry),
+    mineEntry(),
   ];
   const atlas = bakeAtlas(gl, entries, mats, lights, ppu);
   const atlasMs = Math.round(performance.now() - t0);
@@ -231,12 +258,17 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
       const c = valid ? '#3cff6e' : '#ff3a2a';
       hoverMat.color.set(c);
       hoverEdgeMat.color.set(c);
+      hoverValid = valid;
+      paintRange();
     },
     setRangePreview(preview) {
       range.visible = preview !== null;
       if (!preview) return;
       range.position.set(preview.x, 0.1, preview.y);
       range.scale.set(preview.rangeTiles, 1, preview.rangeTiles);
+      foot.scale.setScalar(1 / preview.rangeTiles);
+      rangeKind = preview.kind ?? 'tower';
+      paintRange();
     },
     setSelectedTower(id) {
       selectedId = id;
@@ -259,7 +291,7 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
       units.dispose();
       atlas.dispose();
       terrain.dispose();
-      [hoverGeo, hoverEdgeGeo, ringGeo, discGeo, selGeo, hoverMat, hoverEdgeMat, ringMat, discMat, selMat].forEach((d) => d.dispose());
+      [hoverGeo, hoverEdgeGeo, ringGeo, discGeo, selGeo, tickGeo, footGeo, hoverMat, hoverEdgeMat, ringMat, discMat, selMat, footMat].forEach((d) => d.dispose());
       gl.dispose();
       gl.forceContextLoss(); // free the context now; browsers cap live WebGL contexts (~16)
       canvas.remove();
