@@ -11,7 +11,7 @@ export interface Sfx {
   readonly muted: boolean;
 }
 
-export type SoundId =
+type SoundId =
   | 'gun' | 'mortar' | 'rail' | 'missile' | 'zap' | 'stasis' | 'explosion' | 'shieldHit' | 'shieldBreak'
   | 'squelch' | 'squelchBig' | 'clank' | 'clankBig' | 'leak' | 'klaxon' | 'chime' | 'victory' | 'defeat'
   | 'build' | 'upgrade' | 'sell' | 'siren';
@@ -26,8 +26,9 @@ const COOLDOWN: Readonly<Record<SoundId, number>> = {
 };
 /** UI / game-state cues bypass the voice cap. */
 const PRIORITY = new Set<SoundId>(['leak', 'klaxon', 'siren', 'chime', 'victory', 'defeat', 'build', 'upgrade', 'sell']);
-const SHOT: Readonly<Record<TowerId, SoundId>> = {
-  picket: 'gun', thumper: 'mortar', stasis: 'stasis', longshot: 'rail', breacher: 'missile', arc_coil: 'zap',
+/** Arc Coil has none: it sounds on its 'chain' event. */
+const SHOT: Readonly<Partial<Record<TowerId, SoundId>>> = {
+  picket: 'gun', thumper: 'mortar', stasis: 'stasis', longshot: 'rail', breacher: 'missile',
 };
 
 type Voice = (ac: AudioContext, out: AudioNode, t: number, noise: AudioBuffer) => number; // returns duration
@@ -51,6 +52,14 @@ function osc(ac: AudioContext, type: OscillatorType, f0: number, f1: number, t: 
   o.start(t);
   o.stop(t + dur + 0.02);
   return o;
+}
+function lowpass(ac: AudioContext, out: AudioNode, t: number, f0: number, f1 = f0, dur = 0): BiquadFilterNode {
+  const f = ac.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  f.connect(out);
+  return f;
 }
 function noise(
   ac: AudioContext, buf: AudioBuffer, t: number, dur: number, out: AudioNode,
@@ -109,12 +118,7 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
     return 0.26;
   },
   stasis: (ac, out, t) => {
-    const g = env(ac, out, t, 0.16, 0.05, 0.35);
-    const lp = ac.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(400, t);
-    lp.frequency.exponentialRampToValueAtTime(2200, t + 0.2);
-    lp.connect(g);
+    const lp = lowpass(ac, env(ac, out, t, 0.16, 0.05, 0.35), t, 400, 2200, 0.2);
     osc(ac, 'sawtooth', 110, 104, t, 0.4, lp);
     osc(ac, 'sawtooth', 111.7, 105, t, 0.4, lp);
     osc(ac, 'sine', 1320, 1180, t, 0.35, env(ac, out, t, 0.05, 0.05, 0.3));
@@ -144,11 +148,7 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
   },
   leak: (ac, out, t) => notes(ac, out, t, 'square', [880, 620, 880, 620], 0.11, 0.1, 0.2),
   klaxon: (ac, out, t) => {
-    const lp = ac.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 1400;
-    const g = env(ac, out, t, 0.22, 0.04, 1.3);
-    lp.connect(g);
+    const lp = lowpass(ac, env(ac, out, t, 0.22, 0.04, 1.3), t, 1400);
     for (let i = 0; i < 3; i++) {
       osc(ac, 'sawtooth', 220, 180, t + i * 0.42, 0.38, lp);
       osc(ac, 'sawtooth', 223, 182, t + i * 0.42, 0.38, lp);
@@ -157,11 +157,7 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
   },
   // boss wave: slow rising/falling air-raid wail, twice
   siren: (ac, out, t) => {
-    const lp = ac.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 1800;
-    const g = env(ac, out, t, 0.22, 0.15, 2.3);
-    lp.connect(g);
+    const lp = lowpass(ac, env(ac, out, t, 0.22, 0.15, 2.3), t, 1800);
     for (const det of [1, 1.012]) {
       const o = osc(ac, 'sawtooth', 260 * det, 260 * det, t, 2.4, lp);
       for (let i = 0; i < 2; i++) {
@@ -177,11 +173,7 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
     return notes(ac, out, t, 'triangle', [262, 330, 392, 523], 0.14, 0.6, 0.2);
   },
   defeat: (ac, out, t) => {
-    const lp = ac.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(2000, t);
-    lp.frequency.exponentialRampToValueAtTime(200, t + 1.4);
-    lp.connect(out);
+    const lp = lowpass(ac, out, t, 2000, 200, 1.4);
     return notes(ac, lp, t, 'sawtooth', [392, 311, 262, 196], 0.28, 0.45, 0.2);
   },
   build: (ac, out, t, nb) => {
@@ -222,7 +214,7 @@ function clank(ac: AudioContext, out: AudioNode, t: number, nb: AudioBuffer, pit
 
 function soundFor(ev: SimEvent): SoundId | null {
   switch (ev.type) {
-    case 'shot': return ev.defId === 'arc_coil' ? null : SHOT[ev.defId]; // arc_coil sounds on 'chain'
+    case 'shot': return SHOT[ev.defId] ?? null;
     case 'chain': return 'zap';
     case 'explosion': return 'explosion';
     case 'hit': return ev.shield > 0 ? 'shieldHit' : null;

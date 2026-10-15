@@ -1,20 +1,10 @@
 // Headless balance helper: plays a map with a scripted strategy, no render/UI.
-import {
-  ARMOR_FLOOR,
-  CHAIN_FALLOFF,
-  CHAIN_JUMP_RANGE,
-  DIFFICULTIES,
-  ENEMIES,
-  IGNORES_ARMOR,
-  MAPS,
-  MID_BOSS_HP_MULT,
-  SIZE_MULT,
-  TOWER_LIST,
-  TOWERS,
-} from '../data';
+import { CHAIN_FALLOFF, CHAIN_JUMP_RANGE, DIFFICULTIES, ENEMIES, MAPS, MID_BOSS_HP_MULT, TOWER_LIST, TOWERS } from '../data';
 import type { DifficultyDef, EnemyDef, EnemyId, MapDef, TowerDef, TowerId, TowerLevel } from '../data/types';
+import { resolveHit } from './damage';
 import { createGame } from './game';
 import { buildPath } from './path';
+import { inRange } from './targeting';
 import type { Game, SimConfig } from './types';
 
 /** Called every few steps; dispatches whatever commands it likes. */
@@ -65,10 +55,7 @@ function pathCells(map: MapDef): Cell[] {
 /** Path tiles (weighted) within a tower level's range ring from tile (col,row). */
 function coverage(cells: readonly Cell[], col: number, row: number, lvl: TowerLevel): number {
   let score = 0;
-  for (const c of cells) {
-    const d = Math.hypot(c.x - col - 0.5, c.y - row - 0.5);
-    if (d <= lvl.range && d >= lvl.minRange) score += c.w;
-  }
+  for (const c of cells) if (inRange(c, col + 0.5, row + 0.5, lvl.range, lvl.minRange)) score += c.w;
   return score;
 }
 
@@ -164,8 +151,7 @@ const SLOW_VALUE = 40;
 
 /** Rough effective HP/s a tower level deals to a group (armor, size, shields, splash/chain on packed groups). */
 function effDps(def: TowerDef, L: TowerLevel, t: Threat): number {
-  const sm = SIZE_MULT[def.damageType][t.def.size];
-  const hpHit = Math.max(ARMOR_FLOOR, (L.damage - (IGNORES_ARMOR[def.damageType] ? 0 : t.armor)) * sm);
+  const hpHit = resolveHit(0, t.armor, t.def.size, L.damage, def.damageType, 1).hpDamage;
   const shHit = L.damage * L.shieldMult;
   const exec = t.def.isBoss || t.shield > 0 ? 1 : 1 - L.executeThreshold;
   const hits = Math.ceil(t.shield / shHit + (t.hp * exec) / hpHit - 1e-6); // no overkill credit

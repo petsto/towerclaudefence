@@ -3,7 +3,7 @@ import type { MapDef, Tile } from '../data/types';
 export const SPAWN_COLOR = '#ff3a3a';
 export const CORE_COLOR = '#38e0d0';
 
-/** Draws the map's tile grid at `px` pixels per tile. Reusable as an in-game minimap. */
+/** Draws the map's tile grid at `px` pixels per tile. */
 export function drawMapThumbnail(canvas: HTMLCanvasElement, map: MapDef, px = 4): void {
   canvas.width = map.cols * px;
   canvas.height = map.rows * px;

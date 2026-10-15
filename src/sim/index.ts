@@ -1,3 +1,3 @@
 export type * from './types';
 export { FIXED_DT } from './constants';
-export { createGame } from './game';
+export { createGame, earlyCallBonus } from './game';

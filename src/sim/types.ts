@@ -27,11 +27,11 @@ export interface TowerState {
   readonly rotation: number;
   /** Seconds until ready; 0 = ready/idle. */
   readonly cooldown: number;
-  /** Last target fired at while it is alive and in range (drives turret aim and beam visuals). */
+  /** Last target fired at while it is alive and in range (sim-internal; render aims from `rotation`). */
   readonly targetId: number | null;
   readonly totalDamage: number;
   readonly kills: number;
-  /** Credits a sell would return right now (70% of invested, or 100% while undo applies). */
+  /** Credits a sell would return right now: 100% of spend since the last enemy spawn, 70% of the rest. */
   readonly sellValue: number;
 }
 
@@ -146,15 +146,6 @@ export interface SimConfig {
   readonly difficultyId: DifficultyId;
 }
 
-/**
- * Implemented by the sim engineer in src/sim:
- *
- *   export function createGame(config: SimConfig): Game;
- *
- * Main loop contract (src/main.ts):
- *   acc += realDt * state.speed;  while (acc >= FIXED_DT) { game.step(); acc -= FIXED_DT; }
- *   const events = game.drainEvents();  // once per frame, hand to render/audio/ui
- */
 export interface Game {
   /** Live, read-only view. Replaced or mutated only by the sim; never mutate from outside. */
   readonly state: GameState;

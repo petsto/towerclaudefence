@@ -11,7 +11,7 @@ export interface Candidate {
   readonly slowImmune: boolean;
 }
 
-export function inRange(e: Candidate, cx: number, cy: number, range: number, minRange: number): boolean {
+export function inRange(e: { readonly x: number; readonly y: number }, cx: number, cy: number, range: number, minRange: number): boolean {
   const d = Math.hypot(e.x - cx, e.y - cy);
   return d <= range && d >= minRange;
 }

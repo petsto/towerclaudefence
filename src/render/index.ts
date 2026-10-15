@@ -11,7 +11,6 @@ import { createUnits } from './units';
 export interface Renderer {
   /** Exposed so the FX module can add objects. */
   readonly scene: THREE.Scene;
-  readonly camera: THREE.OrthographicCamera;
   /** Per-frame stats (calls include the shadow pass and blit). */
   readonly info: THREE.WebGLInfo;
   /** Between-step smoothing for enemies/projectiles: main captures before each step and sets alpha. */
@@ -132,7 +131,6 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
 
   return {
     scene,
-    camera,
     info: gl.info,
     interp,
     render(state, frameDt) {

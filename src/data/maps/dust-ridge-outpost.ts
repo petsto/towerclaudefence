@@ -21,7 +21,7 @@ xx..................#...
 ..xxx.....xxx......xx.BB
 `;
 
-// Wave comments: base pool = HP+shields at Normal before growth (mid boss at x0.5); curve = wave-1 pool x (1 + 0.25(w-1)).
+// Wave comments: base pool = HP+shields at Normal before growth (mid boss at x0.55); curve = wave-1 pool x (1 + 0.25(w-1)).
 // Single path. Mostly Chorus; Spindle Drones from wave 4, Rivet Walkers from wave 10.
 const dustRidgeWaves: readonly WaveDef[] = [
   // W1: base pool 450 (curve 450)

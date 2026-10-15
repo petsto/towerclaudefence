@@ -19,7 +19,7 @@ xx.BB....BB#BB.#.xxx
 xx..x....xxxxx...xxx
 `;
 
-// Wave comments: base pool = HP+shields at Normal before growth (mid boss at x0.5); curve = wave-1 pool x (1 + 0.25(w-1)).
+// Wave comments: base pool = HP+shields at Normal before growth (mid boss at x0.55); curve = wave-1 pool x (1 + 0.25(w-1)).
 // Path 0 = north, 1 = east (fast units). Both breaches from wave 1. Full roster, both bosses.
 const hollowSpireWaves: readonly WaveDef[] = [
   // W1: base pool 570 (curve 550)

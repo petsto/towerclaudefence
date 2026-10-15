@@ -1,7 +1,8 @@
 // Dev-only renderer check: renders a map with a fake GameState. ?map=<id>, ?towers=all fills every pad.
 import { ENEMIES, MAP_LIST, MAPS, TOWER_LIST } from '../src/data';
-import type { EnemyId, MapId, Path } from '../src/data/types';
+import type { EnemyId, MapId } from '../src/data/types';
 import { createRenderer } from '../src/render';
+import { buildPath, pointAt } from '../src/sim/path';
 import type { EnemyState, GameState, TowerState } from '../src/sim/types';
 
 const params = new URLSearchParams(location.search);
@@ -40,35 +41,17 @@ let towers: TowerState[] = towerPads.map(([col, row], i) => ({
 
 // Enemies marching along each path.
 const enemyIds = Object.keys(ENEMIES) as EnemyId[];
-function pathLength(p: Path): number {
-  let len = 0;
-  for (let i = 1; i < p.length; i++) len += Math.hypot(p[i]![0] - p[i - 1]![0], p[i]![1] - p[i - 1]![1]);
-  return len;
-}
-function along(p: Path, d: number): { x: number; y: number; heading: number } {
-  for (let i = 1; i < p.length; i++) {
-    const [ax, ay] = p[i - 1]!;
-    const [bx, by] = p[i]!;
-    const seg = Math.hypot(bx - ax, by - ay);
-    if (d <= seg || i === p.length - 1) {
-      const f = Math.min(1, d / seg);
-      return { x: ax + (bx - ax) * f + 0.5, y: ay + (by - ay) * f + 0.5, heading: Math.atan2(by - ay, bx - ax) };
-    }
-    d -= seg;
-  }
-  return { x: p[0]![0] + 0.5, y: p[0]![1] + 0.5, heading: 0 };
-}
-
 function enemiesAt(time: number): EnemyState[] {
   const out: EnemyState[] = [];
   let id = 1;
   map.paths.forEach((p, pi) => {
-    const len = pathLength(p);
+    const geo = buildPath(p);
+    const len = geo.length;
     for (let k = 0; k < 14; k++) {
       const defId = enemyIds[(k + pi * 4) % enemyIds.length]!;
       const def = ENEMIES[defId];
       const d = (time * 1.2 + k * 1.6) % len;
-      const pos = along(p, d);
+      const pos = pointAt(geo, d);
       const dmg = (k * 37) % 100 / 100;
       out.push({
         id: id++,

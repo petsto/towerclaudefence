@@ -24,7 +24,7 @@ function home(): void {
 function play(cfg: SimConfig): void {
   const game = createGame(cfg);
   const renderer = createRenderer(container, MAPS[cfg.mapId]);
-  const fx = createFx(renderer.scene, renderer.interp);
+  const fx = createFx(renderer.scene, renderer.interp, MAPS[cfg.mapId]);
   const canvas = container.querySelector('canvas')!;
   let build: TowerId | null = null;
   let selected: number | null = null;
@@ -47,6 +47,7 @@ function play(cfg: SimConfig): void {
       sfx.setMuted(!sfx.muted);
       return sfx.muted;
     },
+    muted: sfx.muted,
   });
 
   function setSelected(id: number | null): void {
@@ -80,7 +81,7 @@ function play(cfg: SimConfig): void {
     const tower = tile && towerAt(tile.col, tile.row);
     if (build !== null && tile && !tower) {
       const r = game.dispatch({ type: 'build', defId: build, col: tile.col, row: tile.row });
-      if (!r.ok) hud.flash(r.error === 'insufficient cash' ? 'Not enough credits' : r.error === 'cannot build here' ? 'Cannot build there' : r.error);
+      if (!r.ok) hud.flash(r.error);
       else if (!e.shiftKey) setBuild(null); // Shift keeps build mode for repeat placement
       return;
     }
@@ -154,7 +155,7 @@ function play(cfg: SimConfig): void {
   let acc = 0;
   function frame(now: number): void {
     raf = requestAnimationFrame(frame);
-    const dt = Math.min((now - last) / 1000, 0.25);
+    const dt = Math.min(Math.max(0, (now - last) / 1000), 0.25); // first rAF stamp can precede `last`
     last = now;
     acc += dt * game.state.speed;
     while (acc >= FIXED_DT) {
@@ -170,7 +171,7 @@ function play(cfg: SimConfig): void {
       react(events);
     }
     updateOverlays();
-    fx.update(dt);
+    fx.update(game.state.status === 'paused' ? 0 : dt * game.state.speed);
     renderer.render(game.state, dt);
     hud.update(game.state);
   }

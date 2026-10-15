@@ -19,7 +19,7 @@ S#########.xxx......xx
 xx.........xxx..BBB.xx
 `;
 
-// Wave comments: base pool = HP+shields at Normal before growth (mid boss at x0.5); curve = wave-1 pool x (1 + 0.25(w-1)).
+// Wave comments: base pool = HP+shields at Normal before growth (mid boss at x0.55); curve = wave-1 pool x (1 + 0.25(w-1)).
 // Path 0 = north, 1 = south. Waves 1-5 alternate north/south, both from wave 6. Mixed factions.
 const cinderForgeWaves: readonly WaveDef[] = [
   // W1: base pool 560 (curve 500)

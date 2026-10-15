@@ -2,8 +2,8 @@
 // drawn in 11 batched draw calls (2 Points, 1 LineSegments, 8 InstancedMesh). No allocation per event.
 // World: 1 unit = 1 tile, +Y up, sim (x, y) -> world (x, ?, y).
 import * as THREE from 'three';
-import { ENEMIES, MAPS } from '../data';
-import type { DamageType, EnemyId, MapId, TowerId } from '../data/types';
+import { ENEMIES } from '../data';
+import type { DamageType, EnemyId, MapDef, TowerId } from '../data/types';
 import type { GameState, SimEvent } from '../sim/types';
 import type { Interp } from './interp';
 import { TOWER_RISE } from './models';
@@ -429,19 +429,10 @@ function splatGeometry(): THREE.BufferGeometry {
   return g;
 }
 
-function corePosition(mapId: MapId): { x: number; y: number } {
-  const map = MAPS[mapId];
-  let sx = 0, sy = 0, n = 0;
-  map.tiles.forEach((row, r) => row.forEach((t, c) => { if (t === 'core') { sx += c + 0.5; sy += r + 0.5; n++; } }));
-  if (n) return { x: sx / n, y: sy / n };
-  const end = map.paths[0]?.at(-1);
-  return end ? { x: end[0] + 0.5, y: end[1] + 0.5 } : { x: 0, y: 0 };
-}
-
 // ---------------------------------------------------------------- Fx
 
-/** `interp` (optional) smooths projectile/slow-ring positions between sim steps, matching the units. */
-export function createFx(scene: THREE.Scene, interp?: Interp): Fx {
+/** `interp` smooths projectile/slow-ring positions between sim steps, matching the units. */
+export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
   const glow = particleSystem(2048, true);
   const dust = particleSystem(512, false);
   const bolts = boltSystem(96, 4096);
@@ -486,8 +477,8 @@ export function createFx(scene: THREE.Scene, interp?: Interp): Fx {
   scene.add(...objects);
 
   let state: GameState | null = null;
-  let coreMap: MapId | null = null;
-  let core = { x: 0, y: 0 };
+  const end = map.paths[0]!.at(-1)!; // every path ends on the core (data.test.ts)
+  const core = { x: end[0] + 0.5, y: end[1] + 0.5 };
   let time = 0;
 
   // -------- lookups
@@ -633,7 +624,6 @@ export function createFx(scene: THREE.Scene, interp?: Interp): Fx {
 
   function handle(events: readonly SimEvent[], s: GameState): void {
     state = s;
-    if (coreMap !== s.mapId) { coreMap = s.mapId; core = corePosition(s.mapId); }
     for (const ev of events) {
       switch (ev.type) {
         case 'shot': shot(ev, events); break;
@@ -700,7 +690,7 @@ export function createFx(scene: THREE.Scene, interp?: Interp): Fx {
       for (const e of state.enemies) {
         if (!e.slowed || n >= slowCap) continue;
         const r = enemyHeight(e.defId) * 1.1 * pulse;
-        const at = interp ? interp.enemy(e) : e;
+        const at = interp.enemy(e);
         _m.compose(_p.set(at.x, 0.04, at.y), _q.identity(), _s.set(r, 1, r));
         slowMesh.setMatrixAt(n++, _m);
       }
@@ -714,7 +704,7 @@ export function createFx(scene: THREE.Scene, interp?: Interp): Fx {
     let ns = 0, nm = 0;
     if (state) {
       for (const p of state.projectiles) {
-        const at = interp ? interp.projectile(p) : p;
+        const at = interp.projectile(p);
         const px = at.x, py = at.y;
         const total = Math.hypot(p.targetX - p.originX, p.targetY - p.originY) || 1;
         const t = Math.min(1, Math.hypot(px - p.originX, py - p.originY) / total);

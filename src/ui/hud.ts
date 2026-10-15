@@ -1,11 +1,12 @@
 import { DIFFICULTIES } from '../data/difficulty';
-import { EARLY_CALL_MAX, EARLY_CALL_PER_SECOND } from '../data/economy';
+import { WAVE_COUNTDOWN } from '../data/economy';
 import { ENEMIES } from '../data/enemies';
 import { MAPS } from '../data/maps';
 import { TOWERS, TOWER_LIST } from '../data/towers';
-import type { DamageType, EnemyId, TargetingMode, TowerDef, TowerId, TowerLevel } from '../data/types';
+import type { EnemyId, TargetingMode, TowerDef, TowerId, TowerLevel } from '../data/types';
+import { earlyCallBonus } from '../sim';
 import type { Command, CommandResult, GameState, GameStatus, TowerState } from '../sim/types';
-import { fmtInt, h, setAttr, setText } from './dom';
+import { cap, dlRows, fmtInt, h, setAttr, setText } from './dom';
 import { ICON_COMMS, ICON_CREDITS, ICON_LIVES, ICON_MUTED, ICON_PAUSE, ICON_PLAY, ICON_SOUND, TOWER_ICONS } from './icons';
 
 export interface HudOptions {
@@ -15,15 +16,17 @@ export interface HudOptions {
   onExitToMenu(): void;
   /** Returns the new muted state. */
   onToggleMute(): boolean;
-  /** Pause-menu Restart / end-screen Retry. Falls back to onExitToMenu. */
-  onRestart?(): void;
+  /** Audio is already muted (mute outlives a single game). */
+  muted: boolean;
+  /** Pause-menu Restart / end-screen Retry. */
+  onRestart(): void;
 }
 
 export interface Hud {
   update(state: GameState): void;
   selectTower(towerId: number | null): void;
   selectBuild(defId: TowerId | null): void;
-  floatText(screenX: number, screenY: number, text: string, kind: 'cash' | 'damage' | 'info'): void;
+  floatText(screenX: number, screenY: number, text: string, kind: 'cash' | 'damage'): void;
   flash(message: string): void;
   /** Red screen-edge pulse (an enemy reached the core). */
   leak(): void;
@@ -31,13 +34,6 @@ export interface Hud {
 }
 
 const TARGETING: readonly TargetingMode[] = ['first', 'last', 'strongest', 'weakest', 'closest'];
-const DMG_LABEL: Readonly<Record<DamageType, string>> = {
-  normal: 'Normal',
-  concussive: 'Concussive',
-  explosive: 'Explosive',
-  plasma: 'Plasma',
-};
-const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 const FLOAT_POOL = 40;
 
 function dmgText(l: TowerLevel): string {
@@ -92,6 +88,9 @@ function icon(svg: string, cls = 'ico'): HTMLSpanElement {
   return s;
 }
 
+/** The sim leaves the countdown at exactly WAVE_COUNTDOWN while it holds for the field to clear. */
+const held = (s: GameState): boolean => s.nextWaveIn === WAVE_COUNTDOWN && s.enemies.length > 0;
+
 function row(label: string): [HTMLElement, HTMLElement] {
   const v = h('dd');
   return [h('div', 'stat', {}, h('dt', '', {}, label), v), v];
@@ -107,7 +106,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   let lastStatus: GameStatus | null = null;
   let incomingKey = '';
   let portraitKey = '';
-  let muted = false;
+  let muted = opts.muted;
 
   // ---------- top bar
   const cashV = h('span', 'num');
@@ -307,9 +306,6 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   function upgrade(): void {
     const t = selected();
     if (!t) return flash('No structure selected');
-    const next = TOWERS[t.defId].levels[t.level as number];
-    if (!next) return flash('Maximum level reached');
-    if (state && state.cash < next.cost) return flash('Not enough credits');
     send({ type: 'upgrade', towerId: t.id });
   }
 
@@ -364,10 +360,11 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     if (t instanceof HTMLElement && t.isContentEditable) return;
     // let a focused button handle its own activation keys
     if ((e.key === ' ' || e.key === 'Enter') && t instanceof HTMLButtonElement) return;
-    const over = state.status === 'victory' || state.status === 'defeat';
-    if (over) return;
+    if (state.status === 'victory' || state.status === 'defeat') return;
     const key = e.key.toLowerCase();
-    const def = TOWER_LIST.find((d) => d.hotkey === key);
+    if (state.status === 'paused' && key !== 'escape' && key !== 'p' && key !== 'f') return;
+    // e.code too, so digit hotkeys work on AZERTY and similar layouts
+    const def = TOWER_LIST.find((d) => d.hotkey === key || e.code === `Digit${d.hotkey}`);
     if (def) return clickBuild(def);
     switch (key) {
       case 'escape':
@@ -413,7 +410,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     livesBox.classList.toggle('low', s.lives <= 5);
     const w = String(Math.max(0, s.waveIndex + 1)).padStart(2, '0');
     setText(waveV, `${w}/${String(s.waveCount).padStart(2, '0')}`);
-    setText(nextV, s.nextWaveIn === null ? '--' : `0:${String(Math.ceil(s.nextWaveIn)).padStart(2, '0')}`);
+    setText(nextV, s.nextWaveIn === null ? '--' : held(s) ? 'HOLD' : `0:${String(Math.ceil(s.nextWaveIn)).padStart(2, '0')}`);
     setText(speedB, `${s.speed}×`);
     const paused = s.status === 'paused';
     if (pauseB.dataset.paused !== String(paused)) {
@@ -432,6 +429,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     let status: string;
     if (s.waveIndex < 0) status = 'STANDING BY · BUILD DEFENSES';
     else if (s.waveActive) status = 'HOSTILES INBOUND';
+    else if (s.nextWaveIn !== null && held(s)) status = 'NEXT WAVE ON HOLD · CLEAR THE FIELD';
     else if (s.nextWaveIn !== null) status = `NEXT WAVE  T-${Math.ceil(s.nextWaveIn)}s`;
     else if (left) status = 'FINAL WAVE · HOLD THE LINE';
     else status = 'AWAITING ORDERS';
@@ -462,10 +460,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     }
 
     setText(callLabel, s.waveIndex < 0 ? 'BEGIN ASSAULT' : 'CALL WAVE');
-    const bonus =
-      s.nextWaveIn === null
-        ? 0
-        : Math.floor(Math.min(EARLY_CALL_MAX, EARLY_CALL_PER_SECOND * Math.floor(s.nextWaveIn)) * DIFFICULTIES[s.difficultyId].cashMult);
+    const bonus = earlyCallBonus(s.nextWaveIn, s.difficultyId);
     setText(callBonus, bonus > 0 ? `+${bonus} cr` : '');
     const disabled = left || s.status !== 'playing';
     if (callB.disabled !== disabled) callB.disabled = disabled;
@@ -484,7 +479,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     setText(tipName, def.name);
     setText(tipCost, `${l.cost} cr`);
     tipCost.classList.toggle('poor', cash < l.cost);
-    setText(tipType, DMG_LABEL[def.damageType]);
+    setText(tipType, cap(def.damageType));
     tipType.dataset.type = def.damageType;
     setText(tipKey, def.hotkey);
     setText(tipDesc, def.description);
@@ -501,7 +496,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     const next = def.levels[t.level as number];
     setText(tName, def.name);
     setText(tPips, '◆'.repeat(t.level) + '◇'.repeat(3 - t.level));
-    setText(tType, DMG_LABEL[def.damageType]);
+    setText(tType, cap(def.damageType));
     tType.dataset.type = def.damageType;
     setText(rDmg, dmgText(l));
     setText(rRate, `${l.cooldown}s`);
@@ -558,7 +553,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       overlay.replaceChildren();
       return;
     }
-    const restart = (): void => (opts.onRestart ?? opts.onExitToMenu)();
+    const restart = (): void => opts.onRestart();
     let box: HTMLElement;
     if (s.status === 'paused') {
       const resume = btn('btn-wide', 'Resume', 'Resume');
@@ -601,13 +596,15 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
         { role: 'dialog', 'aria-modal': 'true', 'aria-label': win ? 'Victory' : 'Defeat' },
         h('h2', 'ov-title', {}, win ? 'Victory' : 'Defeat'),
         h('p', 'ov-sub', {}, win ? 'Sector secured · the line held' : 'Core breached · outpost lost'),
-        h('dl', 'screen scanlines ov-stats', {}, ...stats.flatMap(([k, v]) => [h('dt', '', {}, k), h('dd', '', {}, v)])),
+        h('dl', 'screen scanlines ov-stats', {}, ...dlRows(stats)),
         h('div', 'ov-btns ov-btns-row', {}, retry, home),
       );
     }
     overlay.replaceChildren(box);
     overlay.hidden = false;
-    box.querySelector('button')?.focus({ preventScroll: true });
+    // End screen: focus the dialog, not Retry, so a held Space/Enter can't restart before it's read.
+    box.tabIndex = -1;
+    (s.status === 'paused' ? box.querySelector('button') ?? box : box).focus({ preventScroll: true });
   }
 
   // ---------- transient feedback
@@ -625,7 +622,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     );
   }
 
-  function floatText(screenX: number, screenY: number, text: string, kind: 'cash' | 'damage' | 'info'): void {
+  function floatText(screenX: number, screenY: number, text: string, kind: 'cash' | 'damage'): void {
     const el = floats[floatNext]!;
     floatNext = (floatNext + 1) % FLOAT_POOL;
     el.textContent = text;

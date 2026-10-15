@@ -2,11 +2,11 @@ import { DIFFICULTIES, DIFFICULTY_LIST } from '../data/difficulty';
 import { MAPS, MAP_LIST } from '../data/maps';
 import type { DifficultyDef, DifficultyId, MapDef, MapId } from '../data/types';
 import type { SimConfig } from '../sim/types';
-import { fmtInt, h, prefersReducedMotion } from './dom';
+import { cap, dlRows, fmtInt, h, prefersReducedMotion } from './dom';
 import { CORE_COLOR, drawMapThumbnail, SPAWN_COLOR } from './thumbnail';
 
-export const GAME_TITLE = 'STEEL MERIDIAN';
-export const GAME_SUBTITLE = 'Frontier Defense Command';
+const GAME_TITLE = 'STEEL MERIDIAN';
+const GAME_SUBTITLE = 'Frontier Defense Command';
 
 const LS_MAP = 'steel-meridian.map';
 const LS_DIFF = 'steel-meridian.difficulty';
@@ -41,13 +41,12 @@ function diffMods(d: DifficultyDef): string {
 }
 
 const tierPips = (tier: number): string => '▮'.repeat(tier) + '▯'.repeat(Math.max(0, 3 - tier));
-const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
 export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) => void): { destroy(): void } {
   const savedMap = load(LS_MAP);
   const savedDiff = load(LS_DIFF);
-  let mapId: MapId = savedMap && savedMap in MAPS ? (savedMap as MapId) : MAP_LIST[0]!.id;
-  let diffId: DifficultyId = savedDiff && savedDiff in DIFFICULTIES ? (savedDiff as DifficultyId) : 'normal';
+  let mapId: MapId = savedMap && Object.hasOwn(MAPS, savedMap) ? (savedMap as MapId) : MAP_LIST[0]!.id;
+  let diffId: DifficultyId = savedDiff && Object.hasOwn(DIFFICULTIES, savedDiff) ? (savedDiff as DifficultyId) : 'normal';
 
   // --- backdrop
   const stars = h('canvas', 'home-stars', { 'aria-hidden': 'true' });
@@ -198,7 +197,7 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
       ['Credits', `${fmtInt(m.startingCash * d.startCashMult)} cr`],
       ['Lives', String(d.lives)],
     ];
-    intel.replaceChildren(...rows.flatMap(([k, v]) => [h('dt', '', {}, k), h('dd', '', {}, v)]));
+    intel.replaceChildren(...dlRows(rows));
   }
 
   function typeBriefing(m: MapDef): void {
@@ -218,8 +217,6 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
   }
 
   function start(): void {
-    save(LS_MAP, mapId);
-    save(LS_DIFF, diffId);
     onStart({ mapId, difficultyId: diffId });
   }
 

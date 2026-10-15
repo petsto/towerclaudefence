@@ -37,3 +37,9 @@ export function prefersReducedMotion(): boolean {
 export function fmtInt(n: number): string {
   return Math.floor(n).toLocaleString('en-US');
 }
+
+export const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** `<dt>`/`<dd>` pairs for a `<dl>`. */
+export const dlRows = (rows: readonly [string, string][]): HTMLElement[] =>
+  rows.flatMap(([k, v]) => [h('dt', '', {}, k), h('dd', '', {}, v)]);

@@ -6,7 +6,7 @@
     <title>FX + SFX test bench</title>
     <style>
       html, body { margin: 0; height: 100%; background: #050608; overflow: hidden; font: 12px monospace; color: #c8d0d8; }
-      canvas { display: block; width: 100%; height: 100%; }
+      #view { position: fixed; inset: 0; }
       #panel { position: fixed; top: 8px; right: 8px; max-width: 300px; justify-content: flex-end; display: flex; flex-wrap: wrap; gap: 4px; }
       #panel b { width: 100%; margin-top: 4px; color: #ffb030; }
       button { font: 11px monospace; background: #2a3038; color: #c8d0d8; border: 1px solid #6b7480; padding: 3px 6px; cursor: pointer; }
@@ -14,6 +14,7 @@
     </style>
   </head>
   <body>
+    <div id="view"></div>
     <div id="panel"></div>
     <script type="module" src="./fx.ts"></script>
   </body>
