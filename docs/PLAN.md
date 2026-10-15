@@ -31,3 +31,11 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
 - Stage 7 ✅ review: correctness + simplicity reviewers → fixer (c05ea10, ad7bf06, 512e325). Deferred simplicity items (terrain/parts helper dupes, units.ts tower-mesh rebuild, duplicate PITCH) folded into 6b.
 - Stage 6b 🔄 graphics fidelity: user feedback (2026-10-15) — towers/enemies look too pixelated/low quality vs StarCraft: Remastered reference (hi-res pre-rendered sprites, worn metal, specular, AO). Prototype `dev/fidelity.html` compares V0 current / V1 HD real-time PBR / V2 pre-rendered sprite atlas / V3 hybrid; user picks, then rollout. User likes current map look — preserve it.
   - Prototype done (01e0472). **Decision: V2 pre-rendered sprite atlas + pixel terrain** (HD PBR models baked to a sprite atlas at load; terrain stays 384p posterized). Rollout: 6a foundation (move prototype into `src/render/hd/`, per-unit model files + registry, showroom) → 6b parallel: pipeline integration in the game renderer + tower/enemy model agents → integration check. **CP3** after rollout + docs.
+
+## Backlog (deferred until playtest says so)
+- **Sprite atlas memory** (user decides after playtesting; not started). Full roster at 128 px/unit ≈ 100 MB GPU; per-map bake (18 tower levels + that map's enemies only) is lower. Levers, cheapest first:
+  1. Lower `pxPerUnit` (128 → 96 ≈ 57 MB full roster; one constant in `src/render/hd/`).
+  2. Separate cell sizes for tower base vs turret (≈20–30% of tower memory, costs a second quad per tower).
+  3. Fewer frames: enemies 8 yaw → 4 (sim paths are axis-aligned), walk frames 4 → 2 for light enemies.
+  4. Bake L2/L3 tower levels lazily on first upgrade instead of at map load.
+  5. GPU texture compression (KTX2/Basis) of the baked atlas; largest saving, most work.
