@@ -203,6 +203,7 @@ Key bindings: `README.md`. Towers use number keys `1`–`6` so WASD stays free f
 | Clear bonus 30 + 6w, starting cash +100; Elite/Brutal softened so Recruit→Veteran→Elite→Brutal is a ramp, not a cliff | Balance pass |
 | Picket upgrades raise fire rate as well as damage; Thumper L2/L3 fire 2/3 shells (16 dmg each): extras hit the next-best targets in range, else land 0.4 tiles around the primary | Balance pass |
 | Command powers (§14): Tremor Mines (Q, 30 s, 3 stored, 60% slow field) and Lance Strike (E, 120 s, 6 Plasma pulses, 20% of a boss). Charging starts at wave 1 launch, not map load (no build-phase banking). Lance damage scales with `g_map`, bosses take a fixed fraction instead (mid and final alike). No difficulty modifier. | Product/game design |
+| Lance charge 120 → 150 s: at 120 s the powers flipped Cinder Forge Elite to a comfortable win. Mines 30 → 40 s and a per-difficulty charge multiplier were tried and dropped (no target moved; Dust Brutal needs ×3 and is non-monotonic below) | Balance pass |
 
 ## 13. Balance
 
@@ -219,7 +220,10 @@ Both bots use the command powers via `withPowers` (§14); one extra block runs t
 - **Brutal:** dies mid-to-late on every map.
 - **Mixing matters:** no single-tower build (`competentStrategy(['picket'])` etc.) beats the mixed bot; mono builds lose Cinder Forge and Hollow Spire on Veteran; Stasis alone never gets past W2.
 
-Known gap: on Brutal, Cinder Forge lasts longer than Dust Ridge (Dust's long single path gives the Choir Mother more births at the W8 mid boss).
+Known gaps:
+
+- On Brutal without powers, Cinder Forge lasts longer than Dust Ridge (Dust's long single path gives the Choir Mother more births at the W8 mid boss).
+- With powers, the competent bot wins Dust Ridge on Elite comfortably and on Brutal outright: one Lance on the W9 mid boss breaks the wall (with only the Lance it ends on 6 lives, with only mines on 2). Open design call.
 
 ## 14. Command powers (`src/data/powers.ts`)
 
@@ -230,7 +234,7 @@ Two orbital-support powers, free and unlimited, gated only by charge. They help 
 | Hotkey | Power | Charge | Stored | Target | Effect |
 |---|---|---|---|---|---|
 | Q | Tremor Mines | 30 s | 3 | free path tile (not spawn/core, one mine per tile) | Armed mine waits, no expiry and no field cap. First enemy within 0.5 opens a slow field: radius 1.5, 8 s, **slow 60%** (lingers 0.5 s after leaving). No damage. |
-| E | Lance Strike | 120 s | 1 | any tile | 1.5 s telegraph (reticle, no damage), then a 3 s beam: **6 pulses** 0.5 s apart on every enemy within 1.75. Pulse = 150 × `g_map`^(wave−1) Plasma (ignores armor, shields ×1.0). |
+| E | Lance Strike | 150 s | 1 | any tile | 1.5 s telegraph (reticle, no damage), then a 3 s beam: **6 pulses** 0.5 s apart on every enemy within 1.75. Pulse = 150 × `g_map`^(wave−1) Plasma (ignores armor, shields ×1.0). |
 
 | Rule | Mines | Lance |
 |---|---|---|
@@ -243,7 +247,7 @@ Two orbital-support powers, free and unlimited, gated only by charge. They help 
 
 **Expected impact** (Normal):
 
-- **Lance:** about 5–8 strikes per map (~1 per 2–3 waves).
+- **Lance:** at most 4–5 strikes per map (~1 per 3–4 waves; Dust ~690 s, Cinder ~855 s, Hollow ~780 s on Normal).
   - Non-boss enemies: 6 pulses deal 900 × `g_map`^(w−1) to a target that stays in the beam. Any L/M enemy dies in 1–2 pulses; a Brood Carrier dies on pulse 5 and its brood dies to pulse 6; an Anvil Tread is left at ~15%.
   - Hordes: a 24-Skitterling stream loses ~half (the beam catches ~5 at once plus ~1.7 more per pulse). A Husk or Rivet group in the beam is wiped.
   - Bosses: 20% per strike. Final bosses take ~1,350 (Dust Choir 6,780), ~2,400 (Cinder Colossus 8,890 + 3,080 sh) and ~2,600 / 3,000 (Hollow Choir 12,950 / Colossus 11,230 + 3,890 sh). Dust's ~150 s final boss walk allows a second strike at most.

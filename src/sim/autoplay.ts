@@ -1,5 +1,5 @@
 // Headless balance helper: plays a map with a scripted strategy, no render/UI.
-import { CHAIN_FALLOFF, CHAIN_JUMP_RANGE, DIFFICULTIES, ENEMIES, MAPS, MID_BOSS_HP_MULT, TOWER_LIST, TOWERS } from '../data';
+import { CHAIN_FALLOFF, CHAIN_JUMP_RANGE, DIFFICULTIES, ENEMIES, MAPS, MID_BOSS_HP_MULT, POWERS, TOWER_LIST, TOWERS } from '../data';
 import type { DifficultyDef, EnemyDef, EnemyId, MapDef, TowerDef, TowerId, TowerLevel } from '../data/types';
 import { resolveHit } from './damage';
 import { createGame } from './game';
@@ -224,6 +224,59 @@ export function competentStrategy(only?: readonly TowerId[]): Strategy {
     const pick = actions.find((a) => a.cost <= s.cash && a.ratio >= top!.ratio * SETTLE);
     if (pick?.run()) return;
     if (s.waveIndex < 0) game.dispatch({ type: 'callWave' });
+  };
+}
+
+/**
+ * Adds the command powers (GDD §14) to any strategy.
+ * Mines: on the free path tile under the most tower range rings, not within the field radius of an armed mine;
+ * ties go nearer the core. Lance: on a living boss, else on the enemy tile whose radius holds the most HP + shields,
+ * if that is at least one full strike on one target. No lead on fast targets.
+ */
+export function withPowers(strategy: Strategy): Strategy {
+  let cells: Cell[] | null = null;
+  return (game, map) => {
+    strategy(game, map);
+    cells ??= pathCells(map);
+    const s = game.state;
+    const mines = POWERS.tremor_mines;
+    const [coreCol, coreRow] = map.paths[0]!.at(-1)!;
+    const toCore = (c: Cell) => Math.hypot(c.x - coreCol - 0.5, c.y - coreRow - 0.5);
+    while (s.powers.tremor_mines.charges > 0) {
+      let best: { cell: Cell; rings: number } | null = null;
+      for (const c of cells) {
+        const col = Math.floor(c.x);
+        const row = Math.floor(c.y);
+        if (!game.canUsePower('tremor_mines', col, row)) continue;
+        if (s.mines.some((m) => Math.hypot(m.x - c.x, m.y - c.y) <= mines.fieldRadius)) continue;
+        const rings = s.towers.filter((t) => {
+          const L = TOWERS[t.defId].levels[t.level - 1]!;
+          return inRange(c, t.col + 0.5, t.row + 0.5, L.range, L.minRange);
+        }).length;
+        if (!best || rings > best.rings || (rings === best.rings && toCore(c) < toCore(best.cell))) best = { cell: c, rings };
+      }
+      if (!best) break;
+      game.dispatch({ type: 'usePower', power: 'tremor_mines', col: Math.floor(best.cell.x), row: Math.floor(best.cell.y) });
+    }
+
+    const lance = POWERS.lance_strike;
+    if (s.powers.lance_strike.charges < 1) return;
+    const alive = s.enemies.filter((e) => e.hp > 0);
+    const boss = alive.find((e) => ENEMIES[e.defId].isBoss);
+    let target = boss;
+    if (!target) {
+      const full = lance.pulses * lance.pulseDamage * map.hpGrowth ** Math.max(0, s.waveIndex);
+      let most = 0;
+      for (const e of alive) {
+        const cx = Math.floor(e.x) + 0.5;
+        const cy = Math.floor(e.y) + 0.5;
+        let held = 0;
+        for (const o of alive) if (Math.hypot(o.x - cx, o.y - cy) <= lance.radius) held += o.hp + o.shield;
+        if (held > most) [most, target] = [held, e];
+      }
+      if (most < full) return;
+    }
+    if (target) game.dispatch({ type: 'usePower', power: 'lance_strike', col: Math.floor(target.x), row: Math.floor(target.y) });
   };
 }
 

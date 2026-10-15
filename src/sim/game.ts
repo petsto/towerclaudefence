@@ -10,6 +10,7 @@ import {
   MAPS,
   MID_BOSS_BOUNTY,
   MID_BOSS_HP_MULT,
+  POWERS,
   SELL_REFUND,
   SHELL_SCATTER,
   SPLASH_INNER,
@@ -21,7 +22,7 @@ import {
   WAVE_COUNTDOWN,
   WAVE_MAX_HOLD,
 } from '../data';
-import type { DamageType, DifficultyId, EnemyDef, EnemyId, TowerDef, TowerLevel } from '../data/types';
+import type { DamageType, DifficultyId, EnemyDef, EnemyId, PowerId, TowerDef, TowerLevel } from '../data/types';
 import { FIXED_DT } from './constants';
 import { resolveHit } from './damage';
 import { buildPath, pointAt } from './path';
@@ -32,10 +33,14 @@ import type {
   EnemyState,
   Game,
   GameState,
+  MineState,
+  PowerState,
   ProjectileState,
   SimConfig,
   SimEvent,
+  StrikeState,
   TowerState,
+  TremorFieldState,
 } from './types';
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -81,10 +86,22 @@ interface Projectile extends Mutable<ProjectileState> {
   done: boolean;
 }
 
-export interface SimState extends Mutable<Omit<GameState, 'towers' | 'enemies' | 'projectiles' | 'events'>> {
+interface Strike extends Mutable<StrikeState> {
+  /** Pulses fired so far. */
+  fired: number;
+}
+
+type SimPowerKeys = 'powers' | 'mines' | 'tremorFields' | 'strikes';
+
+export interface SimState
+  extends Mutable<Omit<GameState, 'towers' | 'enemies' | 'projectiles' | 'events' | SimPowerKeys>> {
   towers: Tower[];
   enemies: Enemy[];
   projectiles: Projectile[];
+  powers: Record<PowerId, Mutable<PowerState>>;
+  mines: MineState[];
+  tremorFields: Mutable<TremorFieldState>[];
+  strikes: Strike[];
   events: SimEvent[];
 }
 
@@ -125,7 +142,6 @@ export function createSim(config: SimConfig) {
     towers: [],
     enemies: [],
     projectiles: [],
-    // phase 2 (sim, GDD §14): charge from wave 1 launch, mines/fields/strikes step logic
     powers: { tremor_mines: { charges: 0, charge: 0 }, lance_strike: { charges: 0, charge: 0 } },
     mines: [],
     tremorFields: [],
@@ -137,6 +153,8 @@ export function createSim(config: SimConfig) {
   let nextEnemyId = 1;
   let nextTowerId = 1;
   let nextProjectileId = 1;
+  let nextMineId = 1;
+  let nextStrikeId = 1;
   let spawner: { wave: number; ticks: number; spawned: number[] } | null = null;
   /** Seconds the current countdown has been held waiting for its wave to clear. */
   let held = 0;
@@ -199,7 +217,7 @@ export function createSim(config: SimConfig) {
     }
   }
 
-  function hit(e: Enemy, damage: number, type: DamageType, shieldMult: number, towerId: number, execute = 0) {
+  function hit(e: Enemy, damage: number, type: DamageType, shieldMult: number, towerId: number | null, execute = 0) {
     if (e.dead) return;
     const r = resolveHit(e.shield, e.armor, e.def.size, damage, type, shieldMult);
     const hpBefore = e.hp;
@@ -509,6 +527,93 @@ export function createSim(config: SimConfig) {
     }
   }
 
+  // ---- command powers (GDD §14) ----
+
+  const MINES = POWERS.tremor_mines;
+  const LANCE = POWERS.lance_strike;
+
+  /** Charges tick on sim time from wave 1 launch; `charge` holds at 0 while charges are full. */
+  function chargePowers() {
+    if (s.waveIndex < 0) return;
+    for (const def of [MINES, LANCE]) {
+      const p = s.powers[def.id];
+      if (p.charges >= def.maxCharges) continue;
+      p.charge += dt;
+      if (p.charge < def.chargeTime - EPS) continue;
+      p.charges++;
+      p.charge = 0;
+      emit({ type: 'powerReady', power: def.id, charges: p.charges });
+    }
+  }
+
+  function updateMines() {
+    for (const m of [...s.mines]) {
+      if (!s.enemies.some((e) => !e.dead && dist(e, m.x, m.y) <= MINES.triggerRadius)) continue;
+      s.mines = s.mines.filter((x) => x !== m);
+      s.tremorFields.push({ id: m.id, x: m.x, y: m.y, radius: MINES.fieldRadius, timeLeft: MINES.fieldDuration });
+      emit({ type: 'mineTriggered', mineId: m.id, x: m.x, y: m.y, radius: MINES.fieldRadius });
+    }
+    for (const f of s.tremorFields) {
+      for (const e of s.enemies) if (dist(e, f.x, f.y) <= f.radius) applySlow(e, MINES.slow, MINES.slowLinger);
+      f.timeLeft -= dt;
+    }
+    s.tremorFields = s.tremorFields.filter((f) => f.timeLeft > EPS);
+  }
+
+  function pulse(st: Strike, index: number) {
+    emit({ type: 'strikePulse', strikeId: st.id, x: st.x, y: st.y, radius: st.radius, index });
+    const damage = LANCE.pulseDamage * map.hpGrowth ** Math.max(0, s.waveIndex);
+    // Snapshot: brood born from a kill this pulse is hit by the next one.
+    const victims = s.enemies.filter((e) => !e.dead && dist(e, st.x, st.y) <= st.radius);
+    for (const e of victims) {
+      const d = e.def.isBoss ? (LANCE.bossFraction * (e.maxHp + e.maxShield)) / LANCE.pulses : damage;
+      hit(e, d, LANCE.damageType, LANCE.shieldMult, null);
+    }
+  }
+
+  function updateStrikes() {
+    const beam = LANCE.pulses * LANCE.pulseInterval;
+    for (const st of s.strikes) {
+      st.timeLeft -= dt;
+      if (st.phase === 'telegraph') {
+        if (st.timeLeft > EPS) continue;
+        st.phase = 'firing';
+        st.timeLeft = beam;
+      }
+      if (st.fired < LANCE.pulses && beam - st.timeLeft >= st.fired * LANCE.pulseInterval - EPS) pulse(st, st.fired++);
+    }
+    s.strikes = s.strikes.filter((st) => st.phase === 'telegraph' || st.timeLeft > EPS);
+  }
+
+  function powerError(power: PowerId, col: number, row: number): string | null {
+    if (s.powers[power].charges < 1) return 'Charging';
+    const tile = map.tiles[row]?.[col];
+    if (tile === undefined) return 'Out of bounds';
+    if (POWERS[power].kind === 'mine') {
+      if (tile !== 'path') return 'Mines go on the lane';
+      if (s.mines.some((m) => m.col === col && m.row === row)) return 'Mine already there';
+    }
+    return null;
+  }
+
+  function usePower(power: PowerId, col: number, row: number): CommandResult {
+    const error = powerError(power, col, row);
+    if (error) return fail(error);
+    s.powers[power].charges--;
+    const x = col + 0.5;
+    const y = row + 0.5;
+    if (power === 'tremor_mines') {
+      const m = { id: nextMineId++, col, row, x, y };
+      s.mines.push(m);
+      emit({ type: 'minePlanted', mineId: m.id, col, row, x, y });
+    } else {
+      const st: Strike = { id: nextStrikeId++, col, row, x, y, radius: LANCE.radius, phase: 'telegraph', timeLeft: LANCE.telegraph, fired: 0 };
+      s.strikes.push(st);
+      emit({ type: 'strikeTelegraph', strikeId: st.id, x, y, radius: st.radius, delay: LANCE.telegraph });
+    }
+    return ok;
+  }
+
   // ---- public API ----
 
   function step() {
@@ -521,8 +626,12 @@ export function createSim(config: SimConfig) {
       s.nextWaveIn -= dt;
       if (s.nextWaveIn <= EPS) launchWave(0);
     }
+    chargePowers();
     updateSpawner();
     updateEnemies();
+    // After movement, before towers: field slows count for Stasis' prefers-unslowed this step.
+    updateMines();
+    updateStrikes();
     for (const t of s.towers) updateTower(t);
     for (const p of s.projectiles) updateProjectile(p);
     s.projectiles = s.projectiles.filter((p) => !p.done);
@@ -615,7 +724,7 @@ export function createSim(config: SimConfig) {
         return ok;
       }
       case 'usePower':
-        return fail('Charging'); // phase 2 (sim): validate placement, spend a charge, plant mine / queue strike
+        return usePower(cmd.power, cmd.col, cmd.row);
       case 'pause':
         if (s.status !== 'playing') return fail('Not playing');
         s.status = 'paused';
@@ -646,7 +755,7 @@ export function createSim(config: SimConfig) {
     dispatch,
     step,
     canBuild,
-    canUsePower: () => false, // phase 2 (sim)
+    canUsePower: (power, col, row) => powerError(power, col, row) === null,
     drainEvents() {
       const events = s.events;
       s.events = [];

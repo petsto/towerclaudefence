@@ -23,7 +23,7 @@ export const LANCE_STRIKE: StrikePowerDef = {
   name: 'Lance Strike',
   description: 'Orbital platform Meridian burns a column of light through whatever stands under the reticle.',
   hotkey: 'e',
-  chargeTime: 120,
+  chargeTime: 150,
   maxCharges: 1,
   radius: 1.75,
   telegraph: 1.5,
