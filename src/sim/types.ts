@@ -81,7 +81,7 @@ export type SimEvent =
   | { readonly type: 'sell'; readonly towerId: number; readonly col: number; readonly row: number; readonly refund: number }
   | { readonly type: 'spawn'; readonly enemyId: number; readonly defId: EnemyId; readonly x: number; readonly y: number }
   /** Tower fired: hitscan/beam resolve now; shell/missile also create a projectile. */
-  | { readonly type: 'shot'; readonly towerId: number; readonly targetId: number }
+  | { readonly type: 'shot'; readonly towerId: number; readonly defId: TowerId; readonly targetId: number }
   /** Damage landed on an enemy. `shield` = damage absorbed by shields this hit. */
   | {
       readonly type: 'hit';
@@ -98,7 +98,7 @@ export type SimEvent =
   | { readonly type: 'shieldBreak'; readonly enemyId: number; readonly x: number; readonly y: number }
   | { readonly type: 'death'; readonly enemyId: number; readonly defId: EnemyId; readonly x: number; readonly y: number; readonly bounty: number }
   | { readonly type: 'leak'; readonly enemyId: number; readonly defId: EnemyId; readonly lives: number }
-  | { readonly type: 'waveStart'; readonly index: number; readonly earlyBonus: number }
+  | { readonly type: 'waveStart'; readonly index: number; readonly earlyBonus: number; readonly boss: 'mid' | 'final' | null }
   | { readonly type: 'waveClear'; readonly index: number; readonly bonus: number }
   | { readonly type: 'gameOver'; readonly result: 'victory' | 'defeat' };
 

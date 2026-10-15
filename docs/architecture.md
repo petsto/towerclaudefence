@@ -33,12 +33,13 @@ Dependency direction: `data` <- `sim` <- `render` / `ui` <- `main`. `sim` import
 ```
 input (mouse/keys, UI buttons)
    -> commands (build, sell, upgrade, startWave, pause, ...)
-   -> queued, applied at the start of the next sim step
-   -> sim.step(FIXED_DT)   x N   (accumulator: N = floor(elapsed / FIXED_DT))
-   -> state (plain objects)
-   -> render reads state, draws scene (may interpolate by leftover alpha)
-   -> ui reads state, updates HUD
+   -> game.dispatch: validated and applied immediately (between steps)
+   -> game.step()   x N   (accumulator: acc += min(dt, 0.25) * speed; one step per FIXED_DT)
+   -> game.drainEvents() once per frame -> fx.handle, sfx.play, HUD reactions (floats, flashes)
+   -> renderer.render(state, dt), hud.update(state)
 ```
+
+Canvas mouse input (hover, build placement, tower selection) lives in `src/main.ts`; hotkeys live in the HUD.
 
 The sim never sees real time, only step counts. Same seed + same command log = same result, which is what makes headless tests and balance runs possible.
 
@@ -55,11 +56,11 @@ The sim never sees real time, only step counts. Same seed + same command log = s
    |               quit                |
    +-----------------------------------+
    |
-   |   continue        last wave cleared
+   |   home            last wave cleared
    +-------------  Victory  <-----------  Playing
    |
-   |   continue        lives reach 0
+   |   home            lives reach 0
    +-------------  Defeat   <-----------  Playing
 ```
 
-`Home` and `Victory`/`Defeat` are UI states; the sim exists only during `Playing`/`Paused`. `Paused` simply stops calling `sim.step`.
+`Home` and `Victory`/`Defeat` are UI states; the sim exists only during `Playing`/`Paused`. `Paused` makes `step()` a no-op. Restart / Retry recreate the game on the same config.

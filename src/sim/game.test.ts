@@ -69,14 +69,14 @@ describe('economy', () => {
     run(game, 590); // ~10.17 s left
     const cash = state.cash;
     game.dispatch({ type: 'callWave' });
-    expect(game.drainEvents().at(-1)).toEqual({ type: 'waveStart', index: 1, earlyBonus: 30 });
+    expect(game.drainEvents().at(-1)).toEqual({ type: 'waveStart', index: 1, earlyBonus: 30, boss: null });
     expect(state.cash).toBe(cash + 30);
 
     const easy = setup('easy');
     easy.game.dispatch({ type: 'callWave' });
     runUntil(easy.game, () => easy.state.nextWaveIn !== null);
     easy.game.dispatch({ type: 'callWave' });
-    expect(easy.game.drainEvents().at(-1)).toEqual({ type: 'waveStart', index: 1, earlyBonus: 75 });
+    expect(easy.game.drainEvents().at(-1)).toEqual({ type: 'waveStart', index: 1, earlyBonus: 75, boss: null });
   });
 
   test('pause accepts only resume/speed; game over accepts nothing', () => {
@@ -144,7 +144,7 @@ describe('waves', () => {
     expect(state.waveIndex).toBe(0);
     game.step();
     expect(state.waveIndex).toBe(1);
-    expect(game.drainEvents()).toContainEqual({ type: 'waveStart', index: 1, earlyBonus: 0 });
+    expect(game.drainEvents()).toContainEqual({ type: 'waveStart', index: 1, earlyBonus: 0, boss: null });
   });
 
   test('leaks cost lives; wave clears (incl. leaked) pay 20 + 5w', () => {

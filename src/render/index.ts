@@ -188,6 +188,7 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
       pixel.dispose();
       [hoverGeo, hoverEdgeGeo, ringGeo, discGeo, selGeo, hoverMat, hoverEdgeMat, ringMat, discMat, selMat].forEach((d) => d.dispose());
       gl.dispose();
+      gl.forceContextLoss(); // free the context now; browsers cap live WebGL contexts (~16)
       canvas.remove();
     },
   };

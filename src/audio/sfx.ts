@@ -14,7 +14,7 @@ export interface Sfx {
 export type SoundId =
   | 'gun' | 'mortar' | 'rail' | 'missile' | 'zap' | 'stasis' | 'explosion' | 'shieldHit' | 'shieldBreak'
   | 'squelch' | 'squelchBig' | 'clank' | 'clankBig' | 'leak' | 'klaxon' | 'chime' | 'victory' | 'defeat'
-  | 'build' | 'upgrade' | 'sell';
+  | 'build' | 'upgrade' | 'sell' | 'siren';
 
 const MASTER = 0.4;
 const MAX_VOICES = 18;
@@ -22,10 +22,10 @@ const MAX_VOICES = 18;
 const COOLDOWN: Readonly<Record<SoundId, number>> = {
   gun: 0.045, mortar: 0.12, rail: 0.1, missile: 0.08, zap: 0.1, stasis: 0.18, explosion: 0.07,
   shieldHit: 0.07, shieldBreak: 0.1, squelch: 0.06, squelchBig: 0.2, clank: 0.06, clankBig: 0.2,
-  leak: 0.5, klaxon: 1, chime: 0.5, victory: 2, defeat: 2, build: 0.05, upgrade: 0.05, sell: 0.05,
+  leak: 0.5, klaxon: 1, chime: 0.5, victory: 2, defeat: 2, build: 0.05, upgrade: 0.05, sell: 0.05, siren: 2,
 };
 /** UI / game-state cues bypass the voice cap. */
-const PRIORITY = new Set<SoundId>(['leak', 'klaxon', 'chime', 'victory', 'defeat', 'build', 'upgrade', 'sell']);
+const PRIORITY = new Set<SoundId>(['leak', 'klaxon', 'siren', 'chime', 'victory', 'defeat', 'build', 'upgrade', 'sell']);
 const SHOT: Readonly<Record<TowerId, SoundId>> = {
   picket: 'gun', thumper: 'mortar', stasis: 'stasis', longshot: 'rail', breacher: 'missile', arc_coil: 'zap',
 };
@@ -155,6 +155,22 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
     }
     return 1.35;
   },
+  // boss wave: slow rising/falling air-raid wail, twice
+  siren: (ac, out, t) => {
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 1800;
+    const g = env(ac, out, t, 0.22, 0.15, 2.3);
+    lp.connect(g);
+    for (const det of [1, 1.012]) {
+      const o = osc(ac, 'sawtooth', 260 * det, 260 * det, t, 2.4, lp);
+      for (let i = 0; i < 2; i++) {
+        o.frequency.exponentialRampToValueAtTime(620 * det, t + i * 1.2 + 0.7);
+        o.frequency.exponentialRampToValueAtTime(260 * det, t + i * 1.2 + 1.2);
+      }
+    }
+    return 2.45;
+  },
   chime: (ac, out, t) => notes(ac, out, t, 'triangle', [660, 880, 1320], 0.09, 0.35, 0.18),
   victory: (ac, out, t) => {
     notes(ac, out, t, 'square', [523, 659, 784, 1047], 0.14, 0.25, 0.1);
@@ -204,9 +220,9 @@ function clank(ac: AudioContext, out: AudioNode, t: number, nb: AudioBuffer, pit
   return 0.3;
 }
 
-function soundFor(ev: SimEvent, towerOf: (id: number) => TowerId | undefined): SoundId | null {
+function soundFor(ev: SimEvent): SoundId | null {
   switch (ev.type) {
-    case 'shot': { const d = towerOf(ev.towerId); return d && d !== 'arc_coil' ? SHOT[d] : null; }
+    case 'shot': return ev.defId === 'arc_coil' ? null : SHOT[ev.defId]; // arc_coil sounds on 'chain'
     case 'chain': return 'zap';
     case 'explosion': return 'explosion';
     case 'hit': return ev.shield > 0 ? 'shieldHit' : null;
@@ -217,7 +233,7 @@ function soundFor(ev: SimEvent, towerOf: (id: number) => TowerId | undefined): S
       return d.faction === 'chorus' ? (big ? 'squelchBig' : 'squelch') : big ? 'clankBig' : 'clank';
     }
     case 'leak': return 'leak';
-    case 'waveStart': return 'klaxon';
+    case 'waveStart': return ev.boss ? 'siren' : 'klaxon';
     case 'waveClear': return 'chime';
     case 'gameOver': return ev.result === 'victory' ? 'victory' : 'defeat';
     case 'build': return 'build';
@@ -246,9 +262,6 @@ export function createSfx(): Sfx {
   let muted = false;
   const last = new Map<SoundId, number>();
   const ends: number[] = [];
-  // 'shot' carries only a towerId, so remember each tower's def from build/sell events.
-  const towers = new Map<number, TowerId>();
-  const towerOf = (id: number) => towers.get(id);
 
   function unlock(): void {
     if (!ac) {
@@ -284,9 +297,7 @@ export function createSfx(): Sfx {
   return {
     play(events) {
       for (const ev of events) {
-        if (ev.type === 'build') towers.set(ev.towerId, ev.defId);
-        else if (ev.type === 'sell') towers.delete(ev.towerId);
-        const id = soundFor(ev, towerOf);
+        const id = soundFor(ev);
         if (id) trigger(id);
       }
     },

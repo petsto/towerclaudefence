@@ -30,7 +30,7 @@ test('idle tower waits at cooldown 0, fires the tick a target enters and aims at
   sim.game.drainEvents();
   sim.game.step();
   const t = sim.state.towers[0]!;
-  expect(sim.game.drainEvents()).toContainEqual({ type: 'shot', towerId: t.id, targetId: e.id });
+  expect(sim.game.drainEvents()).toContainEqual({ type: 'shot', towerId: t.id, defId: t.defId, targetId: e.id });
   expect(t.cooldown).toBeCloseTo(0.4);
   expect(t.targetId).toBe(e.id);
   expect(t.rotation).toBeCloseTo(Math.PI / 2);

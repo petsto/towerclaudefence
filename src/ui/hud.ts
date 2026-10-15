@@ -102,7 +102,6 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   let hoverBuild: TowerId | null = null;
   let shownCash = -1;
   let lastFrame = performance.now();
-  let lastWave = Number.NaN;
   let lastStatus: GameStatus | null = null;
   let incomingKey = '';
   let portraitKey = '';
@@ -582,15 +581,6 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     box.querySelector('button')?.focus({ preventScroll: true });
   }
 
-  function announceWave(s: GameState): void {
-    if (Number.isNaN(lastWave)) lastWave = s.waveIndex;
-    if (s.waveIndex > lastWave) {
-      const wave = MAPS[s.mapId].waves[s.waveIndex];
-      flash(wave?.boss ? `Warning · massive signature · wave ${s.waveIndex + 1}` : `Wave ${s.waveIndex + 1} incoming`);
-    }
-    lastWave = s.waveIndex;
-  }
-
   // ---------- transient feedback
   function flash(message: string): void {
     flashEl.textContent = message;
@@ -635,7 +625,6 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       renderCards(s);
       renderInfo(s);
       renderOverlay(s);
-      announceWave(s);
     },
     selectTower(id) {
       selTower = id;

@@ -225,7 +225,7 @@ export function createSim(config: SimConfig) {
   function launch(t: Tower, lvl: TowerLevel, target: Enemy, kind: 'shell' | 'missile') {
     const x = t.col + 0.5;
     const y = t.row + 0.5;
-    emit({ type: 'shot', towerId: t.id, targetId: target.id });
+    emit({ type: 'shot', towerId: t.id, defId: t.defId, targetId: target.id });
     s.projectiles.push({
       id: nextProjectileId++,
       kind,
@@ -252,18 +252,18 @@ export function createSim(config: SimConfig) {
     t.targetId = target.id;
     switch (t.def.delivery) {
       case 'hitscan':
-        emit({ type: 'shot', towerId: t.id, targetId: target.id });
+        emit({ type: 'shot', towerId: t.id, defId: t.defId, targetId: target.id });
         hit(target, lvl.damage, type, lvl.shieldMult, t.id, lvl.executeThreshold);
         break;
       case 'beam':
         for (const e of ranked.slice(0, lvl.beamTargets)) {
-          emit({ type: 'shot', towerId: t.id, targetId: e.id });
+          emit({ type: 'shot', towerId: t.id, defId: t.defId, targetId: e.id });
           hit(e, lvl.damage, type, lvl.shieldMult, t.id);
           applySlow(e, lvl.slow, lvl.slowDuration);
         }
         break;
       case 'chain': {
-        emit({ type: 'shot', towerId: t.id, targetId: target.id });
+        emit({ type: 'shot', towerId: t.id, defId: t.defId, targetId: target.id });
         const points = [{ x: t.col + 0.5, y: t.row + 0.5 }];
         const struck = new Set<Enemy>();
         let cur = target;
@@ -377,7 +377,7 @@ export function createSim(config: SimConfig) {
     s.waveActive = true;
     s.nextWaveIn = null;
     s.cash += earlyBonus;
-    emit({ type: 'waveStart', index: s.waveIndex, earlyBonus });
+    emit({ type: 'waveStart', index: s.waveIndex, earlyBonus, boss: map.waves[s.waveIndex]!.boss });
   }
 
   function updateSpawner() {

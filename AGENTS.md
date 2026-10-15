@@ -28,10 +28,21 @@ index.html        #app: canvas container + #ui overlay
 src/main.ts       boot: wires sim, render, ui, and the game loop
 src/sim/          pure deterministic simulation (no three, no DOM)
 src/data/         definitions: towers, enemies, maps, difficulty
-src/render/       Three.js; reads sim state, draws it
+src/render/       Three.js; reads sim state, draws it (fx.ts: event-driven VFX)
+src/audio/        WebAudio-synthesised SFX driven by sim events
 src/ui/           DOM overlays: home screen, HUD, build/sell panel
+dev/              standalone sandbox pages (see below), not shipped
 docs/             plan, architecture, design docs
 ```
+
+### Dev sandboxes
+
+Open via `npm run dev` at `/dev/<name>.html`. Each drives one module with fake state, no sim:
+
+- `render.html`: renderer on a real map with fake towers/enemies (`?map=<id>`, `?towers=all`).
+- `models.html`: tower (L1–L3) and enemy model showroom.
+- `fx.html`: FX + SFX bench; scripted fake combat plus buttons for every effect and sound.
+- `ui.html`: home screen and HUD over a placeholder stage with a fake `GameState`.
 
 ## Architecture rules
 

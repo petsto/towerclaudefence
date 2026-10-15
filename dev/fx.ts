@@ -142,7 +142,7 @@ function fire(t: Mut<TowerState>): void {
   t.rotation = Math.atan2(target.y - ty, target.x - tx);
   t.targetId = target.id;
   t.cooldown = lv.cooldown;
-  events.push({ type: 'shot', towerId: t.id, targetId: target.id });
+  events.push({ type: 'shot', towerId: t.id, defId: t.defId, targetId: target.id });
   const dt = TOWERS[t.defId].damageType;
   switch (TOWERS[t.defId].delivery) {
     case 'hitscan': damage(target, lv.damage * 0.7, dt); break;
@@ -208,7 +208,7 @@ function stepSim(dt: number): void {
   if (clock > nextCycle) {
     nextCycle = clock + 2.5;
     switch (cycleStep++ % 5) {
-      case 0: events.push({ type: 'waveStart', index: state.waveIndex++, earlyBonus: 0 }); spareTower = build('picket', 12, 4); break;
+      case 0: events.push({ type: 'waveStart', index: state.waveIndex++, earlyBonus: 0, boss: null }); spareTower = build('picket', 12, 4); break;
       case 1: if (spareTower) { spareTower.level = 2; events.push({ type: 'upgrade', towerId: spareTower.id, level: 2 }); } break;
       case 2: if (spareTower) { spareTower.level = 3; events.push({ type: 'upgrade', towerId: spareTower.id, level: 3 }); } break;
       case 3:
@@ -258,8 +258,9 @@ btn('upgrade (L3)', () => { const t = state.towers[0]; if (t) push({ type: 'upgr
 btn('leak', () => push({ type: 'leak', enemyId: -1, defId: 'skitterling', lives: 1 }));
 btn('spawn', () => push({ type: 'spawn', enemyId: -1, defId: 'rivet_walker', x: P.x, y: P.y }));
 section('sounds');
-for (const t of state.towers.slice(0, 6)) btn(`shot ${t.defId}`, () => push({ type: 'shot', towerId: t.id, targetId: state.enemies[0]?.id ?? -1 }));
-btn('waveStart', () => push({ type: 'waveStart', index: 0, earlyBonus: 0 }));
+for (const t of state.towers.slice(0, 6)) btn(`shot ${t.defId}`, () => push({ type: 'shot', towerId: t.id, defId: t.defId, targetId: state.enemies[0]?.id ?? -1 }));
+btn('waveStart', () => push({ type: 'waveStart', index: 0, earlyBonus: 0, boss: null }));
+btn('waveStart boss', () => push({ type: 'waveStart', index: 0, earlyBonus: 0, boss: 'mid' }));
 btn('waveClear', () => push({ type: 'waveClear', index: 0, bonus: 0 }));
 btn('victory', () => push({ type: 'gameOver', result: 'victory' }));
 btn('defeat', () => push({ type: 'gameOver', result: 'defeat' }));
