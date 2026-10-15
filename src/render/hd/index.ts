@@ -24,18 +24,30 @@
 import type { EnemyId, TowerId } from '../../data/types';
 import { createEnemyGeometry } from '../models';
 import { towerGeometries } from '../models/towers';
+import { broodCarrier } from './enemies/brood_carrier';
+import { choirMother } from './enemies/choir_mother';
+import { anvilTread } from './enemies/anvil_tread';
+import { foundryColossus } from './enemies/foundry_colossus';
 import { huskCrawler } from './enemies/husk_crawler';
+import { menderUnit } from './enemies/mender_unit';
 import { rivetWalker } from './enemies/rivet_walker';
+import { spindleDrone } from './enemies/spindle_drone';
+import { skitterling } from './enemies/skitterling';
 import { countTris, type Built, type Level, type Part } from './kit';
 import { WALK, type BakeEntry } from './sprites';
+import { arcCoil } from './towers/arc_coil';
 import { breacher } from './towers/breacher';
+import { longshot } from './towers/longshot';
 import { picket } from './towers/picket';
+import { stasis } from './towers/stasis';
+import { thumper } from './towers/thumper';
 
 export type TowerModel = (level: Level) => Built;
 export type EnemyModel = (phase: number) => Built;
 
-export const HD_TOWERS: Partial<Record<TowerId, TowerModel>> = { picket, breacher };
-export const HD_ENEMIES: Partial<Record<EnemyId, EnemyModel>> = { husk_crawler: huskCrawler, rivet_walker: rivetWalker };
+export const HD_TOWERS: Partial<Record<TowerId, TowerModel>> = { picket, stasis, longshot, thumper, breacher, arc_coil: arcCoil };
+export const HD_ENEMIES: Partial<Record<EnemyId, EnemyModel>> = { husk_crawler: huskCrawler, rivet_walker: rivetWalker, skitterling, brood_carrier: broodCarrier, choir_mother: choirMother,
+  spindle_drone: spindleDrone, mender_unit: menderUnit, anvil_tread: anvilTread, foundry_colossus: foundryColossus };
 
 const cache = new Map<string, Built>();
 const cached = (key: string, make: () => Built): Built => {

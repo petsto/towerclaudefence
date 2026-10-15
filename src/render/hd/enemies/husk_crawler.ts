@@ -2,6 +2,7 @@
 // claws, glowing tail bio-sac.
 import * as THREE from 'three';
 import { C, PI, finalize, kit, sph, torus, type Built, type V3 } from '../kit';
+import { bioSac } from './chorus';
 
 export function huskCrawler(phase: number): Built {
   const k = kit();
@@ -40,7 +41,7 @@ export function huskCrawler(phase: number): Built {
     k.rod([0.29, cy + 0.12, s * 0.15], [0.39, cy - 0.04, s * 0.12], 0.016, 'chitin', C.chBone, 0, 10);
   }
   // glowing bio-sac on the tail, cinched by dark chitin bands
-  k.glow(sph(0.068, 24, 16), C.chGlow, { p: [-0.33, cy + 0.075, 0] }, 5);
+  bioSac(k, [-0.33, cy + 0.075, 0], [-0.6, 0.8, 0], 0.068);
   for (const a of [0.5, -0.5]) k.add(torus(0.066, 0.009, 24), 'chitin', C.chDark, { p: [-0.33, cy + 0.075, 0], r: [PI / 2 + a, 0, 0] });
   return finalize(k, 0);
 }
