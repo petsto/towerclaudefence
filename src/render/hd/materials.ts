@@ -26,7 +26,5 @@ export function makeMaterials(gl: THREE.WebGLRenderer): Record<MatId, THREE.Mate
       clearcoat: 0.7, clearcoatRoughness: 0.15, vertexColors: true, envMap, envMapIntensity: 0.6 * ENV_I,
     }),
     glow: new THREE.MeshBasicMaterial({ vertexColors: true }),
-    // fallback for units without an HD model: the current game's low-poly look
-    lowpoly: new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true }),
   };
 }

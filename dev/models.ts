@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { ENEMIES, MAP_LIST, MAPS, TOWER_LIST } from '../src/data';
 import type { EnemyId, MapId, TowerId } from '../src/data/types';
 import {
-  bakeAtlas, builtToGroup, createSprites, ENEMY_YAW, enemyBuilt, enemyEntry, enemyFrame, HD_ENEMIES, HD_TOWERS, makeMaterials,
+  bakeAtlas, builtToGroup, createSprites, ENEMY_YAW, enemyBuilt, enemyEntry, enemyFrame, makeMaterials,
   TOWER_BASE, TOWER_YAW, towerBuilt, towerEntry, towerFrame, towerKey, WALK, type BakeEntry, type Built, type Level, type SpriteItem,
 } from '../src/render/hd';
 import { createPixelPass } from '../src/render/pixel';
@@ -34,19 +34,18 @@ const SPLIT = 0.4; // left pane share of the width
 
 // --- nav ---------------------------------------------------------------------------------------------------------
 const bar = document.getElementById('bar')!;
-const link = (label: string, params: Record<string, string | null>, on: boolean, lo = false): void => {
+const link = (label: string, params: Record<string, string | null>, on: boolean): void => {
   const p = new URLSearchParams(location.search);
   for (const [k, v] of Object.entries(params)) v === null ? p.delete(k) : p.set(k, v);
   const a = document.createElement('a');
   a.href = `?${p}`;
   a.textContent = label;
-  a.className = on ? 'on' : lo ? 'lo' : '';
-  if (lo) a.title = 'no HD model yet: low-poly fallback';
+  a.className = on ? 'on' : '';
   bar.appendChild(a);
 };
 link('grid', { unit: null, level: null }, GRID);
-for (const id of TOWER_IDS) link(id, { unit: id }, focusTower === id, !HD_TOWERS[id]);
-for (const id of ENEMY_IDS) link(id, { unit: id, level: null }, focusEnemy === id, !HD_ENEMIES[id]);
+for (const id of TOWER_IDS) link(id, { unit: id }, focusTower === id);
+for (const id of ENEMY_IDS) link(id, { unit: id, level: null }, focusEnemy === id);
 if (focusTower) for (const lv of [1, 2, 3]) link(`L${lv}`, { level: String(lv) }, LEVEL === lv);
 for (const m of MAP_LIST) link(m.name, { map: m.id }, m.id === map.id);
 link(STILL ? 'still: on' : 'still: off', { still: STILL ? null : '1' }, STILL);
@@ -155,10 +154,7 @@ spriteScene.add(sprites.mesh);
 
 // --- HUD ---------------------------------------------------------------------------------------------------------
 const built = (s: Slot): Built => (s.tower ? towerBuilt(s.tower, s.level!) : enemyBuilt(s.enemy!, 0));
-const tag = (s: Slot): string => {
-  const hd = s.tower ? !!HD_TOWERS[s.tower] : !!HD_ENEMIES[s.enemy!];
-  return `${s.tower ? `${s.tower} L${s.level}` : s.enemy} ${hd ? 'HD' : 'fallback'} ${(built(s).tris / 1000).toFixed(1)}k tris`;
-};
+const tag = (s: Slot): string => `${s.tower ? `${s.tower} L${s.level}` : s.enemy} ${(built(s).tris / 1000).toFixed(1)}k tris`;
 const stats = {
   ppu, atlas: atlas.size, mb: +(atlas.bytes / 1048576).toFixed(1), bakeMs: Math.round(atlas.ms), entries: entries.length,
   cells: Object.fromEntries(entries.map((e) => { const [, , w, h] = atlas.quad(e.key); return [e.key, `${Math.round(w * ppu)}x${Math.round(h * ppu)}`]; })),

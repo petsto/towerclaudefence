@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-export type MatId = 'metal' | 'paint' | 'hazard' | 'chitin' | 'glow' | 'lowpoly';
+export type MatId = 'metal' | 'paint' | 'hazard' | 'chitin' | 'glow';
 export type Level = 1 | 2 | 3;
 export type G = THREE.BufferGeometry;
 export type V3 = readonly [number, number, number];

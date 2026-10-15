@@ -43,6 +43,8 @@ input (mouse/keys, UI buttons)
 
 Canvas mouse input (hover, build placement, tower selection) lives in `src/main.ts`; game hotkeys live in the HUD (`src/ui/hud.ts`); camera pan/zoom (WASD, arrows, edge-pan, wheel) lives in `src/render/camera.ts`.
 
+Rendering (`src/render/index.ts`): terrain, decals and overlays render at ~384p and are posterized; units are HD PBR models (`src/render/hd/`, one file per tower/enemy, registered in full `Record`s so every id needs a model) baked once per map load into a sprite atlas (16 turret yaws + base per tower level, 8 yaws × 4 walk phases per enemy) and drawn as native-resolution billboards (`src/render/units.ts`) between the world pass and the overlay pass (airborne FX, HP bars).
+
 The sim never sees real time, only step counts. Same seed + same command log = same result, which is what makes headless tests and balance runs possible.
 
 ## Game state machine

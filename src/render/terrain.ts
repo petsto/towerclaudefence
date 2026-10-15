@@ -1,8 +1,7 @@
 // Static map geometry (art-direction §4): instanced tile boxes, pad frames, biome decor, spawn portals, colony core.
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Biome, MapDef, Tile } from '../data/types';
-import { box as pbox, cyl, merge } from './models/parts';
 
 export const PATH_Y = -0.08;
 export const PAD_Y = 0.06;
@@ -40,6 +39,33 @@ function seedOf(id: string): number {
   let h = 7;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
   return h;
+}
+
+// --- vertex-coloured primitives for the merged decor / core meshes (p = position, r = Euler XYZ rotation) -----------
+type V3 = readonly [number, number, number];
+interface Xf { p?: V3; r?: V3 }
+function part(src: THREE.BufferGeometry, color: number, xf: Xf): THREE.BufferGeometry {
+  src.deleteAttribute('uv');
+  src.deleteAttribute('normal');
+  const geo = src.index ? src : mergeVertices(src);
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(...(xf.r ?? [0, 0, 0])));
+  geo.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...(xf.p ?? [0, 0, 0])), q, new THREE.Vector3(1, 1, 1)));
+  const c = new THREE.Color(color); // sRGB hex -> linear, matching how three reads vertex colours
+  const n = geo.attributes.position!.count;
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+  return geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+}
+const pbox = (w: number, h: number, d: number, c: number, xf: Xf = {}) => part(new THREE.BoxGeometry(w, h, d), c, xf);
+const cyl = (rTop: number, rBot: number, h: number, seg: number, c: number, xf: Xf = {}) =>
+  part(new THREE.CylinderGeometry(rTop, rBot, h, seg), c, xf);
+function merge(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const geo = mergeGeometries(parts, false);
+  for (const p of parts) p.dispose();
+  if (!geo) throw new Error('mergeGeometries failed: mismatched attributes');
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+  return geo;
 }
 
 interface Inst {
