@@ -25,3 +25,8 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
 - **CP1** after stage 1 (design locked, data contracts in place).
 - **CP2** after stage 5 (playable build verified in browser).
 - **CP3** after stage 7 (final).
+
+## Status log
+- Stage 0 ✅ design docs in `docs/design/`; scaffold committed.
+- Stage 1 ✅ `docs/GDD.md`, `src/data/*`, `src/sim/types.ts` contract (events accumulate; drained once per frame via `game.drainEvents()`). **CP1 reached.**
+- Stages 2–4 🔄 parallel: sim (`src/sim`), render core (`src/render` excl. models/fx), models (`src/render/models`), FX + audio (`src/render/fx.ts`, `src/audio`), UI (`src/ui`). Each verifies via its own page under `dev/`; `src/main.ts` + `index.html` are reserved for stage 5 integration.
