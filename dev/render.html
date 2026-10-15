@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Renderer dev</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #view { position: absolute; inset: 0; }
+      #hud { position: absolute; left: 8px; top: 8px; color: #3cff9e; font: 12px monospace; pointer-events: none; text-shadow: 0 0 2px #000; white-space: pre; }
+      #maps { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; }
+      #maps a { color: #ffb030; font: 12px monospace; background: #12151a; padding: 4px 6px; border: 1px solid #3a414b; text-decoration: none; }
+    </style>
+  </head>
+  <body>
+    <div id="view"></div>
+    <div id="hud"></div>
+    <nav id="maps"></nav>
+    <script type="module" src="./render.ts"></script>
+  </body>
+</html>
