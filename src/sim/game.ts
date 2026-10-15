@@ -11,6 +11,7 @@ import {
   MID_BOSS_BOUNTY,
   MID_BOSS_HP_MULT,
   SELL_REFUND,
+  SHELL_SCATTER,
   SPLASH_INNER,
   SPLASH_OUTER_MULT,
   TOWERS,
@@ -74,6 +75,9 @@ interface Projectile extends Mutable<ProjectileState> {
   readonly speed: number;
   readonly splashRadius: number;
   readonly shieldMult: number;
+  /** Aim offset from the target (scattered extra shells). */
+  readonly offsetX: number;
+  readonly offsetY: number;
   done: boolean;
 }
 
@@ -233,7 +237,7 @@ export function createSim(config: SimConfig) {
 
   // ---- towers ----
 
-  function launch(t: Tower, lvl: TowerLevel, target: Enemy, kind: 'shell' | 'missile') {
+  function launch(t: Tower, lvl: TowerLevel, target: Enemy, kind: 'shell' | 'missile', offsetX = 0, offsetY = 0) {
     const x = t.col + 0.5;
     const y = t.row + 0.5;
     emit({ type: 'shot', towerId: t.id, defId: t.defId, targetId: target.id });
@@ -247,12 +251,14 @@ export function createSim(config: SimConfig) {
       originX: x,
       originY: y,
       targetId: target.id,
-      targetX: target.x,
-      targetY: target.y,
+      targetX: target.x + offsetX,
+      targetY: target.y + offsetY,
       damage: lvl.damage,
       speed: lvl.projectileSpeed,
       splashRadius: lvl.splashRadius,
       shieldMult: lvl.shieldMult,
+      offsetX,
+      offsetY,
       done: false,
     });
   }
@@ -301,13 +307,32 @@ export function createSim(config: SimConfig) {
         break;
       }
       case 'shell':
-        launch(t, lvl, target, 'shell');
-        break;
       case 'missile':
-        launch(t, lvl, target, 'missile');
-        t.salvoLeft = lvl.shots - 1;
-        t.salvoTimer = lvl.salvoInterval;
+        launch(t, lvl, target, t.def.delivery);
         break;
+    }
+    t.salvoLeft = lvl.shots - 1;
+    t.salvoTimer = lvl.salvoInterval;
+  }
+
+  /** Rest of a salvo. Missiles: same target. Shells: next-best target, else scattered around the primary. */
+  function salvoShot(t: Tower, lvl: TowerLevel, ranked: () => Enemy[]) {
+    const primary = findEnemy(t.targetId);
+    if (t.def.delivery === 'shell') {
+      const k = lvl.shots - t.salvoLeft;
+      // ponytail: re-ranked per shell, so a shell can double up if the ranking shifts mid-salvo.
+      const next = ranked().filter((e) => e !== primary)[k - 1];
+      const target = next ?? primary ?? ranked()[0];
+      if (!target) return;
+      const a = (2 * Math.PI * k) / lvl.shots;
+      const r = next ? 0 : SHELL_SCATTER;
+      launch(t, lvl, target, 'shell', r * Math.cos(a), r * Math.sin(a));
+      return;
+    }
+    const target = primary ?? ranked()[0];
+    if (target) {
+      t.targetId = target.id;
+      launch(t, lvl, target, 'missile');
     }
   }
 
@@ -324,11 +349,7 @@ export function createSim(config: SimConfig) {
     if (t.salvoLeft > 0) {
       t.salvoTimer -= dt;
       if (t.salvoTimer <= EPS) {
-        const target = findEnemy(t.targetId) ?? ranked()[0];
-        if (target) {
-          t.targetId = target.id;
-          launch(t, lvl, target, 'missile');
-        }
+        salvoShot(t, lvl, ranked);
         t.salvoLeft--;
         t.salvoTimer += lvl.salvoInterval;
       }
@@ -357,8 +378,8 @@ export function createSim(config: SimConfig) {
       p.targetId = null; // shell flies on to the last known position
     }
     if (target) {
-      p.targetX = target.x;
-      p.targetY = target.y;
+      p.targetX = target.x + p.offsetX;
+      p.targetY = target.y + p.offsetY;
     }
     const d = dist(p, p.targetX, p.targetY);
     const travel = p.speed * dt;

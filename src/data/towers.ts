@@ -16,8 +16,8 @@ const NONE: Omit<TowerLevel, 'cost' | 'damage' | 'cooldown' | 'range'> = {
 
 // Each level spreads the previous one, so the diff reads like the GDD upgrade table.
 const picket1: TowerLevel = { ...NONE, cost: 100, damage: 6, cooldown: 0.4, range: 3.5 };
-const picket2: TowerLevel = { ...picket1, cost: 75, damage: 8 };
-const picket3: TowerLevel = { ...picket2, cost: 125, damage: 11, cooldown: 0.35, range: 4 };
+const picket2: TowerLevel = { ...picket1, cost: 75, damage: 7, cooldown: 0.33 };
+const picket3: TowerLevel = { ...picket2, cost: 125, damage: 9, cooldown: 0.27, range: 4 };
 
 const thumper1: TowerLevel = {
   ...NONE,
@@ -29,8 +29,8 @@ const thumper1: TowerLevel = {
   splashRadius: 1.25,
   projectileSpeed: 5,
 };
-const thumper2: TowerLevel = { ...thumper1, cost: 110, damage: 30, splashRadius: 1.5 };
-const thumper3: TowerLevel = { ...thumper2, cost: 190, damage: 44, cooldown: 1.5 };
+const thumper2: TowerLevel = { ...thumper1, cost: 110, damage: 16, splashRadius: 1.5, shots: 2, salvoInterval: 0.15 };
+const thumper3: TowerLevel = { ...thumper2, cost: 190, damage: 16, cooldown: 1.5, shots: 3 };
 
 const stasis1: TowerLevel = { ...NONE, cost: 120, damage: 4, cooldown: 1, range: 3, slow: 0.35, slowDuration: 2 };
 const stasis2: TowerLevel = { ...stasis1, cost: 90, slow: 0.45, slowDuration: 2.5, range: 3.5 };

@@ -94,3 +94,15 @@ test('only Remnant enemies have shields', () => {
     if (enemy.faction !== 'remnant') expect(enemy.shield, enemy.id).toBe(0);
   }
 });
+
+test('picket upgrades raise damage and fire rate every level', () => {
+  const [l1, l2, l3] = TOWERS.picket.levels;
+  expect(l2.damage).toBeGreaterThan(l1.damage);
+  expect(l3.damage).toBeGreaterThan(l2.damage);
+  expect(l2.cooldown).toBeLessThan(l1.cooldown);
+  expect(l3.cooldown).toBeLessThan(l2.cooldown);
+});
+
+test('thumper fires 1/2/3 shells per volley', () => {
+  expect(TOWERS.thumper.levels.map((l) => l.shots)).toEqual([1, 2, 3]);
+});

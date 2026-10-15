@@ -51,8 +51,8 @@ Build only on `B` tiles, one per tile, never blocks the path. Build/upgrade inst
 
 | Tower | L2 cost: changes | L3 cost: changes | Invested |
 |---|---|---|---|
-| Picket | 75: dmg 8 | 125: dmg 11, cd 0.35, range 4.0 | 300 |
-| Thumper | 110: dmg 30, splash 1.5 | 190: dmg 44, cd 1.50 | 450 |
+| Picket | 75: dmg 7, cd 0.33 | 125: dmg 9, cd 0.27, range 4.0 | 300 |
+| Thumper | 110: 2 shells × dmg 16 (0.15 s apart), splash 1.5 | 190: 3 shells, cd 1.50 | 450 |
 | Stasis | 90: slow 45%, 2.5 s, range 3.5 | 150: slow 50%, dmg 8, beam forks to 3 | 360 |
 | Longshot | 130: dmg 70, range 6.0 | 220: dmg 105, cd 2.40, execute 15% | 575 |
 | Breacher | 150: dmg 50 | 250: 3 missiles, cd 1.80, range 5.0 | 600 |
@@ -201,6 +201,7 @@ Key bindings: `README.md`. Towers use number keys `1`–`6` so WASD stays free f
 | Bosses 3000 / 2600+900 base, mid ×0.55, Choir births every 10 s; `g_map` 1.06 / 1.075 / 1.08; final escorts trimmed, pre-final waves ramp | Balance pass |
 | Longshot 225 cr, 40 dmg, range 5.5 (was mono-spam optimal on Dust Ridge); Picket L2/L3 trimmed; Thumper faster; Breacher/Arc +0.5 range | Balance pass |
 | Clear bonus 30 + 6w, starting cash +100; Elite/Brutal softened so Recruit→Veteran→Elite→Brutal is a ramp, not a cliff | Balance pass |
+| Picket upgrades raise fire rate as well as damage; Thumper L2/L3 fire 2/3 shells (16 dmg each): extras hit the next-best targets in range, else land 0.4 tiles around the primary | Balance pass |
 
 ## 13. Balance
 

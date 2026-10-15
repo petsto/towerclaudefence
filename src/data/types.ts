@@ -43,7 +43,7 @@ export interface TowerLevel {
   readonly slowDuration: number;
   /** Simultaneous targets (Stasis L3 beam fork = 3). */
   readonly beamTargets: number;
-  /** Projectiles per salvo. */
+  /** Projectiles per salvo. Missiles all chase one target; shells spread over the next-best targets. */
   readonly shots: number;
   /** Seconds between projectiles within a salvo. */
   readonly salvoInterval: number;

@@ -22,6 +22,8 @@ export const ARMOR_FLOOR = 0.5;
 /** Splash: 100% within SPLASH_INNER * R, SPLASH_OUTER_MULT from there to R. Primary always 100%. */
 export const SPLASH_INNER = 0.5;
 export const SPLASH_OUTER_MULT = 0.5;
+/** Extra shells with no other target land this many tiles off the primary (evenly spaced around it). */
+export const SHELL_SCATTER = 0.4;
 
 /** Chain: jump to nearest unhit enemy within CHAIN_JUMP_RANGE tiles; each jump x CHAIN_FALLOFF. */
 export const CHAIN_JUMP_RANGE = 2;

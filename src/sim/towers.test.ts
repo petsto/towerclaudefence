@@ -105,3 +105,40 @@ test('stasis L3 beam forks to 3 targets', () => {
   expect(sim.list.filter((e) => e.slowed)).toHaveLength(3);
   expect(sim.game.drainEvents().filter((e) => e.type === 'shot')).toHaveLength(3);
 });
+
+const upgradeTo = (sim: ReturnType<typeof scene>, level: number) => {
+  for (let l = 1; l < level; l++) expect(sim.game.dispatch({ type: 'upgrade', towerId: 1 }).ok).toBe(true);
+  sim.game.drainEvents();
+};
+const shots = (events: SimEvent[]) => events.flatMap((e) => (e.type === 'shot' ? [e.targetId] : []));
+
+test.each([1, 2, 3])('thumper L%d fires that many shells per volley, staggered', (level) => {
+  const sim = scene('thumper', [['skitterling', 7], ['skitterling', 6], ['skitterling', 4], ['skitterling', 3]]);
+  upgradeTo(sim, level);
+  sim.game.step();
+  expect(shots(sim.game.drainEvents())).toHaveLength(1);
+  run(sim.game, 60); // salvo done, cooldown (>= 1.5 s) not yet
+  expect(shots(sim.game.drainEvents())).toHaveLength(level - 1);
+});
+
+test('thumper extra shells go to the next-best targets in range', () => {
+  const sim = scene('thumper', [['skitterling', 3], ['skitterling', 7], ['skitterling', 6], ['skitterling', 4]]);
+  upgradeTo(sim, 3);
+  run(sim.game, 20);
+  const [, a, b] = sim.list; // 'first': p7, p6, then p4
+  expect(shots(sim.game.drainEvents())).toEqual([a!.id, b!.id, sim.list[3]!.id]);
+});
+
+test('thumper extra shells scatter around a lone target (fixed pattern, primary still hit)', () => {
+  const sim = scene('thumper', [['husk_crawler', 6]]);
+  upgradeTo(sim, 3);
+  runUntil(sim.game, () => sim.state.events.filter((e) => e.type === 'explosion').length === 3);
+  const events = sim.game.drainEvents();
+  const e = sim.list[0]!;
+  expect(shots(events)).toEqual([e.id, e.id, e.id]);
+  const booms = events.flatMap((ev) => (ev.type === 'explosion' ? [Math.hypot(ev.x - e.x, ev.y - e.y)] : []));
+  expect(booms[0]).toBeCloseTo(0);
+  expect(booms[1]).toBeCloseTo(0.4);
+  expect(booms[2]).toBeCloseTo(0.4);
+  expect(hits(events).filter(([id]) => id === e.id)).toHaveLength(3);
+});
