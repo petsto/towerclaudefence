@@ -1,5 +1,5 @@
 // HD model contract. Units are HD PBR models baked at load into a sprite atlas (./sprites.ts) and drawn as billboards
-// over the pixel terrain. Showroom: /dev/models.html (?unit=<id>&level=<n>).
+// over the baked HD terrain. Showroom: /dev/models.html (?unit=<id>&level=<n>).
 //
 // Coordinates: 1 unit = 1 tile, +Y up, the model faces +X (yaw 0), origin at its feet / footprint centre on the
 //   ground. Towers fit the 0.9×0.9 footprint (the standard plinth is 0.88²; barrels may overhang a little) and stand

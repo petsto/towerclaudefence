@@ -1,22 +1,22 @@
-// HD terrain (stage 6b terrain prototype, spec docs/terrain-hd.md). Same contract as src/render/terrain.ts's Terrain
-// (group, topAt, setOccupied, update, dispose) so it can drop in. Pieces:
+// HD terrain scene (spec docs/terrain-hd.md), pre-rendered by ./bake.ts (createMapTerrain is the entry point). Pieces:
 //   heightfield  one mesh at SUB verts/tile: ground ~0, path recessed to PATH_Y with a bevelled curb, decor tiles raised
 //                into noisy cliffs/mesas, map border skirt down to -SKIRT; terrain material (./material.ts)
 //   mask         map-wide RGBA DataTexture (MASK_PX/tile): R path, G groundAlt macro, B baked AO, A glow region
 //   props        pads (kit PBR + live corner lights), rocks (terrain material), crystals, wrecks, spawn portals, core
-// `live` lists the animated / state-driven objects (pad lights, portal rings, core glow): a pre-rendered terrain (./bake.ts)
-// bakes everything else and keeps these real-time.
+// `live` lists the animated / state-driven objects (pad lights, portal rings, core glow): ./bake.ts bakes everything
+// else and keeps these real-time.
 import * as THREE from 'three';
 import type { Biome, MapDef, Tile } from '../../../data/types';
-import { PAD_Y, PATH_Y } from '../../terrain';
 import type { Built, MatId } from '../kit';
-import { makeMaterials } from '../materials';
 import { builtToGroup } from '../sprites';
 import { hash } from '../textures';
-import { terrainMaterial } from './material';
+import { terrainMaterial, type TerrainLook } from './material';
 import { coreModel, crystalGeo, padFrameGeo, padModel, portalModel, rockGeo, wreckModels } from './props';
 import { terrainSets } from './textures';
 
+/** Top of path / spawn / core tiles and of build pads (where enemies walk and towers stand); ground is ~0. */
+export const PATH_Y = -0.08;
+export const PAD_Y = 0.06;
 const SUB = 10; // heightfield verts per tile
 const MASK_PX = 16; // mask texels per tile
 const SKIRT = 1.5;
@@ -26,8 +26,6 @@ export interface HdTerrain {
   readonly group: THREE.Group;
   /** Objects that must stay real-time (animated or state-driven). */
   readonly live: THREE.Object3D[];
-  /** The ground surface (heightfield + skirt): a pre-rendered variant reuses it as a depth-only proxy. */
-  readonly ground: THREE.Mesh;
   topAt(col: number, row: number): number;
   setOccupied(keys: ReadonlySet<string>): void;
   update(time: number): void;
@@ -36,12 +34,20 @@ export interface HdTerrain {
   readonly ms: number;
 }
 
-interface Style { rocks: number; crystals: number; crystal: string; crystalGlow: number; wreck: number; glowG: string; glowR: string }
+/**
+ * Per-biome decor recipe + terrain look (a new Biome needs a case here). crystal: shard tint; crystalSize: height scale;
+ * crystalSat: 0 = grey-cliff body, 1 = full tint; look: see TerrainLook in ./material.ts.
+ */
+interface Style { rocks: number; crystals: number; crystal: string; crystalGlow: number; crystalSize: number; crystalSat: number; wreck: number; look: TerrainLook }
 function style(biome: Biome, p: MapDef['palette']): Style {
   switch (biome) {
-    case 'badlands': return { rocks: 2.6, crystals: 0, crystal: p.cliff, crystalGlow: 0, wreck: 0.18, glowG: '#000000', glowR: '#000000' };
-    case 'volcanic': return { rocks: 2.2, crystals: 0.4, crystal: p.accent, crystalGlow: 0.7, wreck: 0.12, glowG: p.accent, glowR: p.accent };
-    case 'crystal': return { rocks: 0.9, crystals: 2.6, crystal: p.decor, crystalGlow: 0.3, wreck: 0.14, glowG: p.accent, glowR: p.decor };
+    case 'badlands': return { rocks: 2.6, crystals: 0, crystal: p.cliff, crystalGlow: 0, crystalSize: 1, crystalSat: 1, wreck: 0.18,
+      look: { glowG: '#000000', glowR: '#000000', top: 1.15, rim: 0.25, propGround: false } };
+    case 'volcanic': return { rocks: 2.2, crystals: 0.4, crystal: p.accent, crystalGlow: 0.7, crystalSize: 0.6, crystalSat: 1, wreck: 0.12,
+      look: { glowG: p.accent, glowR: p.accent, top: 0.72, rim: 1.1, propGround: true } };
+    // crystals are accents, not focus: fewer, shorter, desaturated toward the cliff rock, faint glow
+    case 'crystal': return { rocks: 1.1, crystals: 1.4, crystal: p.decor, crystalGlow: 0.1, crystalSize: 0.7, crystalSat: 0.5, wreck: 0.14,
+      look: { glowG: p.accent, glowR: `#${new THREE.Color(p.decor).multiplyScalar(0.55).getHexString()}`, top: 1.15, rim: 0.3, propGround: false } };
   }
 }
 
@@ -58,7 +64,8 @@ const seedOf = (id: string): number => [...id].reduce((h, ch) => (h * 31 + ch.ch
 const isPath = (t: Tile | undefined): boolean => t === 'path' || t === 'spawn' || t === 'core';
 const isDecor = (t: Tile | undefined): boolean => t === 'decor';
 
-export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain {
+/** `mats`: the unit materials (makeMaterials), shared with the sprite atlas bake; the caller owns and disposes them. */
+export function createHdTerrain(map: MapDef, mats: Record<MatId, THREE.Material>): HdTerrain {
   const t0 = performance.now();
   const p = map.palette;
   const seed = seedOf(map.id);
@@ -141,7 +148,6 @@ export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain
   }
 
   // --- props ---------------------------------------------------------------------------------------------------
-  const mats = makeMaterials(gl);
   const envMap = (mats.metal as THREE.MeshStandardMaterial).envMap;
   const sets = terrainSets(map.biome, p, seed);
   let n = 0;
@@ -180,7 +186,7 @@ export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain
       }
       const cx = c + 0.3 + rnd() * 0.4, cz = r + 0.3 + rnd() * 0.4;
       for (let i = count(st.crystals); i > 0; i--) {
-        const x = cx + (rnd() - 0.5) * 0.5, z = cz + (rnd() - 0.5) * 0.5, s = (0.5 + rnd() * 0.8) * (map.biome === 'crystal' ? 1 : 0.6);
+        const x = cx + (rnd() - 0.5) * 0.5, z = cz + (rnd() - 0.5) * 0.5, s = (0.5 + rnd() * 0.8) * st.crystalSize;
         crystals.push({ m: m4(x, height(x, z) - 0.04, z, new THREE.Vector3(s, s * (0.35 + rnd() * 0.45), s), rnd() * 6.28, (rnd() - 0.5) * 0.6, (rnd() - 0.5) * 0.6), k: rnd() });
       }
       if (rnd() < st.wreck) {
@@ -222,7 +228,7 @@ export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain
   const maskTex = new THREE.DataTexture(mask, MW, MH, THREE.RGBAFormat);
   maskTex.magFilter = maskTex.minFilter = THREE.LinearFilter;
   maskTex.needsUpdate = true;
-  const tMat = terrainMaterial(sets, maskTex, map, p, { ground: st.glowG, rock: st.glowR }, envMap);
+  const tMat = terrainMaterial(sets, maskTex, map, p, st.look, envMap);
 
   const group = new THREE.Group();
   const live: THREE.Object3D[] = [];
@@ -240,20 +246,29 @@ export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain
     group.add(mesh);
     return mesh;
   };
-  const instBuilt = (b: Built, list: THREE.Matrix4[], cast = true): void => {
-    for (const part of b.parts) inst(part.geo, mats[part.mat as MatId], list, cast && part.mat !== 'glow');
+  // userData.occluder: the geometry ./bake.ts merges into the depth-only occluder instead (null = none)
+  const instBuilt = (b: Built, list: THREE.Matrix4[], cast = true, occlude = true): void => {
+    for (const part of b.parts) {
+      const mesh = inst(part.geo, mats[part.mat as MatId], list, cast && part.mat !== 'glow');
+      if (mesh && !occlude) mesh.userData.occluder = null;
+    }
   };
   const rockGeos = Array.from({ length: ROCK_VARIANTS }, (_, i) => rockGeo(seed + i * 13));
-  rockGeos.forEach((g, i) => inst(g, tMat, rocks[i]!));
+  const rockLow = Array.from({ length: ROCK_VARIANTS }, (_, i) => rockGeo(seed + i * 13, 1)); // same cuts, 1/16 the tris
+  rockGeos.forEach((g, i) => {
+    const mesh = inst(g, tMat, rocks[i]!);
+    if (mesh) mesh.userData.occluder = rockLow[i];
+  });
   const cGeo = crystalGeo();
   const cCol = new THREE.Color(st.crystal);
-  const cMat = new THREE.MeshStandardMaterial({ color: cCol.clone().multiplyScalar(0.6), emissive: cCol.clone().multiplyScalar(st.crystalGlow), roughness: 0.18, metalness: 0.1, flatShading: true, envMap, envMapIntensity: 1.2 });
+  const cBody = new THREE.Color(p.cliff).lerp(cCol, st.crystalSat).multiplyScalar(0.7);
+  const cMat = new THREE.MeshStandardMaterial({ color: cBody, emissive: cCol.clone().multiplyScalar(st.crystalGlow), roughness: 0.28, metalness: 0.1, flatShading: true, envMap, envMapIntensity: 0.7 });
   const cMesh = inst(cGeo, cMat, crystals.map((c) => c.m));
   crystals.forEach((c, i) => cMesh?.setColorAt(i, new THREE.Color(1, 1, 1).multiplyScalar(0.75 + c.k * 0.5)));
   const wr = wreckModels();
   wr.forEach((b, i) => instBuilt(b, wrecks[i]!));
   const pad = padModel(p.buildPad, PAD_Y);
-  instBuilt(pad, pads, false);
+  instBuilt(pad, pads, false, false); // flat: not worth occluding
   const frameGeo = padFrameGeo(PAD_Y);
   const frameMat = new THREE.MeshBasicMaterial();
   const accentDim = new THREE.Color(p.accent).multiplyScalar(0.7);
@@ -264,11 +279,14 @@ export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain
   }
   let occupied = padKeys.map(() => false);
 
+  // live glow parts get their own material: the shared unit materials may be disposed once a pre-render is done
+  const liveGlow = new THREE.MeshBasicMaterial({ vertexColors: true });
+  const liveMats = { ...mats, glow: liveGlow };
   const portal = portalModel();
   const rings: THREE.Object3D[] = [];
   for (const at of spawns) {
     const body = builtToGroup(portal.body, mats);
-    const ring = builtToGroup(portal.ring, mats);
+    const ring = builtToGroup(portal.ring, liveMats);
     body.position.copy(at);
     ring.position.copy(at);
     group.add(body, ring);
@@ -279,7 +297,7 @@ export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain
   const coreGlows: THREE.Object3D[] = [];
   for (const at of cores) {
     const body = builtToGroup(core.body, mats);
-    const glow = builtToGroup(core.glow, mats);
+    const glow = builtToGroup(core.glow, liveMats);
     body.position.copy(at);
     glow.position.copy(at);
     group.add(body, glow);
@@ -290,7 +308,6 @@ export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain
   return {
     group,
     live,
-    ground,
     topAt,
     ms,
     setOccupied(keys) {
@@ -315,38 +332,8 @@ export function createHdTerrain(map: MapDef, gl: THREE.WebGLRenderer): HdTerrain
     },
     dispose() {
       for (const t of [sets.ground, sets.path, sets.rock]) for (const x of Object.values(t)) (x as THREE.Texture).dispose();
-      for (const m of Object.values(mats)) {
-        for (const v of Object.values(m)) if (v instanceof THREE.Texture) v.dispose();
-        m.dispose();
-      }
-      [geo, cGeo, frameGeo, ...rockGeos, maskTex, tMat, cMat, frameMat].forEach((d) => d.dispose());
+      [geo, cGeo, frameGeo, ...rockGeos, ...rockLow, maskTex, tMat, cMat, frameMat, liveGlow].forEach((d) => d.dispose());
       group.traverse((o) => o instanceof THREE.InstancedMesh && o.dispose());
     },
   };
-}
-
-/** Rough GPU bytes of everything under `root`: unique geometry buffers + instance buffers + textures (mips ×4/3). */
-export function gpuBytes(root: THREE.Object3D): number {
-  const geos = new Set<THREE.BufferGeometry>();
-  const texs = new Set<THREE.Texture>();
-  let bytes = 0;
-  root.traverse((o) => {
-    if (!(o instanceof THREE.Mesh)) return;
-    geos.add(o.geometry);
-    if (o instanceof THREE.InstancedMesh) bytes += o.instanceMatrix.array.byteLength + (o.instanceColor?.array.byteLength ?? 0);
-    const m = o.material as THREE.Material & { uniforms?: Record<string, { value: unknown }>; userData: { tex?: THREE.Texture[] } };
-    for (const v of Object.values(m)) if (v instanceof THREE.Texture) texs.add(v);
-    for (const t of m.userData.tex ?? []) texs.add(t);
-  });
-  for (const g of geos) {
-    for (const a of Object.values(g.attributes)) bytes += (a as THREE.BufferAttribute).array.byteLength;
-    bytes += g.index?.array.byteLength ?? 0;
-  }
-  for (const t of texs) {
-    const img = t.image as { width?: number; height?: number } | null;
-    const w = img?.width ?? 0, h = img?.height ?? 0;
-    const cube = (t as THREE.Texture & { isCubeTexture?: boolean }).isCubeTexture ? 6 : 1;
-    bytes += w * h * 4 * cube * (t.generateMipmaps && t.minFilter !== THREE.LinearFilter && t.minFilter !== THREE.NearestFilter ? 4 / 3 : 1);
-  }
-  return bytes;
 }

@@ -8,7 +8,7 @@ import type { GameState, TowerState } from '../sim/types';
 import { PITCH } from './camera';
 import { createSprites, enemyFrame, TOWER_BASE, towerFrame, towerKey, type Atlas, type SpriteItem } from './hd';
 import type { Interp } from './interp';
-import { OVERLAY_LAYER } from './pixel';
+import { OVERLAY_LAYER } from './view';
 
 const BAR_W = 0.5;
 const BAR_H = 0.07;
@@ -25,7 +25,7 @@ const TURN_RATE = 18; // 1/s, exponential ease of turret yaw toward the sim's (s
 const SPRITE_CAP = 1024; // 2 per tower + 1 per enemy
 
 export interface Units {
-  /** Unit sprites: drawn at native resolution between the pixel pass and the overlay. */
+  /** Unit sprites: drawn after the world pass, before the overlay layer. */
   readonly sprites: THREE.Object3D;
   /** Override material for `sprites`: writes their opaque silhouettes to depth only (FX occlusion). */
   readonly spriteDepth: THREE.Material;

@@ -35,25 +35,27 @@ export const sstep = (a: number, b: number, x: number): number => {
 };
 
 export interface Surf { h: Float32Array; r: Float32Array; g: Float32Array; b: Float32Array; rough: Float32Array; metal: Float32Array }
-export const surf = (): Surf => ({
-  h: new Float32Array(S * S), r: new Float32Array(S * S), g: new Float32Array(S * S), b: new Float32Array(S * S),
-  rough: new Float32Array(S * S), metal: new Float32Array(S * S),
+/** n×n surface (unit sets: S; terrain sets go smaller, see ./terrain/textures.ts). */
+export const surf = (n = S): Surf => ({
+  h: new Float32Array(n * n), r: new Float32Array(n * n), g: new Float32Array(n * n), b: new Float32Array(n * n),
+  rough: new Float32Array(n * n), metal: new Float32Array(n * n),
 });
-export const idx = (x: number, y: number): number => wrap(y, S) * S + wrap(x, S);
+export const idx = (x: number, y: number, n = S): number => wrap(y, n) * n + wrap(x, n);
 
 export interface TexSet { map: THREE.Texture; orm: THREE.Texture; normal: THREE.Texture }
 
 /** Terrain sets: `heightInR` stores the normalised height in ORM red (height blending), `glow` (0..1) replaces metalness in
  * ORM blue (canvas alpha is premultiplied, so it can't carry a mask). */
 export function toTextures(s: Surf, normalStrength: number, opt: { glow?: Float32Array; heightInR?: boolean } = {}): TexSet {
+  const n = Math.round(Math.sqrt(s.h.length));
   let h0 = Infinity, h1 = -Infinity;
   if (opt.heightInR) for (const v of s.h) [h0, h1] = [Math.min(h0, v), Math.max(h1, v)];
   const mk = (fill: (d: Uint8ClampedArray, i: number) => void, srgb: boolean): THREE.Texture => {
     const c = document.createElement('canvas');
-    c.width = c.height = S;
+    c.width = c.height = n;
     const ctx = c.getContext('2d')!;
-    const img = ctx.createImageData(S, S);
-    for (let i = 0; i < S * S; i++) fill(img.data, i);
+    const img = ctx.createImageData(n, n);
+    for (let i = 0; i < n * n; i++) fill(img.data, i);
     ctx.putImageData(img, 0, 0);
     const t = new THREE.CanvasTexture(c);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -75,8 +77,8 @@ export function toTextures(s: Surf, normalStrength: number, opt: { glow?: Float3
   }, false);
   // Sobel on the wrapped height field. Canvas y runs down, texture v up (flipY), so ny takes +dh/dy.
   const normal = mk((d, i) => {
-    const x = i % S, y = (i / S) | 0;
-    const H = (dx: number, dy: number): number => s.h[idx(x + dx, y + dy)]!;
+    const x = i % n, y = (i / n) | 0;
+    const H = (dx: number, dy: number): number => s.h[idx(x + dx, y + dy, n)]!;
     const gx = H(1, -1) + 2 * H(1, 0) + H(1, 1) - H(-1, -1) - 2 * H(-1, 0) - H(-1, 1);
     const gy = H(-1, 1) + 2 * H(0, 1) + H(1, 1) - H(-1, -1) - 2 * H(0, -1) - H(1, -1);
     const nx = -gx * normalStrength, ny = gy * normalStrength;

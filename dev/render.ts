@@ -1,4 +1,6 @@
-// Dev-only renderer check: renders a map with a fake GameState. ?map=<id>, ?towers=all fills every pad.
+// Dev-only renderer check: renders a map with a fake GameState. ?map=<id>, ?towers=all fills every pad,
+// ?enemies=<n> per path (default 14), ?res=WxH fixes the drawing buffer (physical px).
+// window.__bench(frames) -> ms/frame + draw calls at zoom 24/30/40; window.__step(dt) renders one frame.
 import { ENEMIES, MAP_LIST, MAPS, TOWER_LIST } from '../src/data';
 import type { MapId } from '../src/data/types';
 import { createRenderer, mapEnemies } from '../src/render';
@@ -8,6 +10,10 @@ import type { EnemyState, GameState, TowerState } from '../src/sim/types';
 const params = new URLSearchParams(location.search);
 const map = MAPS[(params.get('map') as MapId) ?? 'dust-ridge-outpost'] ?? MAP_LIST[0]!;
 const allTowers = params.get('towers') === 'all';
+const perPath = Number(params.get('enemies') ?? 14);
+const res = params.get('res')?.split('x').map(Number);
+const view = document.getElementById('view')!;
+if (res) Object.assign(view.style, { right: 'auto', bottom: 'auto', width: `${res[0]! / devicePixelRatio}px`, height: `${res[1]! / devicePixelRatio}px` });
 
 const nav = document.getElementById('maps')!;
 for (const m of MAP_LIST) {
@@ -17,7 +23,9 @@ for (const m of MAP_LIST) {
   nav.appendChild(a);
 }
 
-const renderer = createRenderer(document.getElementById('view')!, map);
+const t0 = performance.now();
+const renderer = createRenderer(view, map);
+const loadMs = Math.round(performance.now() - t0);
 const hud = document.getElementById('hud')!;
 
 // Towers on a spread of pads.
@@ -47,10 +55,10 @@ function enemiesAt(time: number): EnemyState[] {
   map.paths.forEach((p, pi) => {
     const geo = buildPath(p);
     const len = geo.length;
-    for (let k = 0; k < 14; k++) {
+    for (let k = 0; k < perPath; k++) {
       const defId = enemyIds[(k + pi * 4) % enemyIds.length]!;
       const def = ENEMIES[defId];
-      const d = (time * 1.2 + k * 1.6) % len;
+      const d = (time * 1.2 + k * (len / perPath)) % len;
       const pos = pointAt(geo, d);
       const dmg = (k * 37) % 100 / 100;
       out.push({
@@ -77,7 +85,6 @@ let last = performance.now();
 let selected: number | null = null;
 let fps = 60;
 
-const view = document.getElementById('view')!;
 view.addEventListener('pointermove', (e) => {
   const t = renderer.pickTile(e.clientX, e.clientY);
   const free = t !== null && map.tiles[t.row]?.[t.col] === 'build' && !towers.some((w) => w.col === t.col && w.row === t.row);
@@ -91,11 +98,8 @@ view.addEventListener('click', (e) => {
   renderer.setRangePreview(tw ? { x: tw.col + 0.5, y: tw.row + 0.5, rangeTiles: 3.5 } : null);
 });
 
-function frame(now: number): void {
-  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); // first rAF stamp can precede `last`
-  last = now;
+function step(dt: number): void {
   time += dt;
-  fps += (1 / Math.max(dt, 1e-3) - fps) * 0.05;
   const enemies = enemiesAt(time);
   towers = towers.map((t, i) => {
     let best: EnemyState | undefined;
@@ -127,9 +131,39 @@ function frame(now: number): void {
     events: [],
   };
   renderer.render(state, dt);
+}
+
+let paused = false;
+function frame(now: number): void {
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); // first rAF stamp can precede `last`
+  last = now;
+  fps += (1 / Math.max(dt, 1e-3) - fps) * 0.05;
+  if (!paused) step(dt);
   const i = renderer.info;
-  hud.textContent = `${map.name}  fps ${fps.toFixed(0)}  calls ${i.render.calls}  tris ${i.render.triangles}\ntowers ${towers.length}  enemies ${enemies.length}  WASD/arrows/edge pan, wheel zoom, click tower`;
+  hud.textContent = `${map.name}  fps ${fps.toFixed(0)}  calls ${i.render.calls}  tris ${i.render.triangles}  load ${loadMs} ms ${JSON.stringify(renderer.bake)}\ntowers ${towers.length}  enemies ${perPath * map.paths.length}  WASD/arrows/edge pan, wheel zoom, click tower`;
   Object.assign(window, { __calls: i.render.calls, __renderer: renderer });
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
+
+// Throughput bench: frames rendered back to back, GPU-synced at the end (readPixels), at each zoom step.
+const canvas = view.querySelector('canvas')!;
+const ctx = canvas.getContext('webgl2')!;
+const wheel = (deltaY: number): boolean => canvas.dispatchEvent(new WheelEvent('wheel', { deltaY, cancelable: true }));
+function bench(frames = 120): Record<string, { ms: number; calls: number; tris: number }> {
+  paused = true;
+  const out: Record<string, { ms: number; calls: number; tris: number }> = {};
+  for (let i = 0; i < 3; i++) wheel(1); // widest
+  for (const z of [24, 30, 40]) {
+    for (let i = 0; i < 10; i++) step(1 / 60);
+    const { calls, triangles: tris } = renderer.info.render;
+    const t = performance.now();
+    for (let i = 0; i < frames; i++) step(1 / 60);
+    ctx.readPixels(0, 0, 1, 1, ctx.RGBA, ctx.UNSIGNED_BYTE, new Uint8Array(4));
+    out[`z${z}`] = { ms: +((performance.now() - t) / frames).toFixed(2), calls, tris };
+    wheel(-1);
+  }
+  paused = false;
+  return out;
+}
+Object.assign(window, { __bench: bench, __step: step, __load: { loadMs, ...renderer.bake } });

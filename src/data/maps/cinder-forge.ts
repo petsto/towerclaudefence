@@ -145,7 +145,7 @@ export const cinderForge: MapDef = {
     'The geothermal forge is our only fuel source in the sector, and two enemy columns are converging on it from the ash fields. Stop them at the junction or lose the refinery.',
   palette: {
     ground: '#3A3634',
-    groundAlt: '#5E3A3C', // stays charcoal-red under the 8-level posterize (was olive)
+    groundAlt: '#5E3A3C', // charcoal-red (olive read as green)
     path: '#7A6F63',
     buildPad: '#4D5A66',
     decor: '#1E1B1A',

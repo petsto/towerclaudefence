@@ -1,8 +1,14 @@
-// Procedural terrain texture sets per biome (canvas, tileable, 512² = 2 world units): ground, path, rock (cliff faces,
+// Procedural terrain texture sets per biome (canvas, tileable, N² = 2 world units): ground, path, rock (cliff faces,
 // sampled with v = world height). Coloured from the map palette so the map keeps its identity. ORM red = height (for
 // height blending in the terrain shader), ORM blue = glow mask (lava cracks, creep pustules, crystal veins).
 import type { Biome, MapPalette } from '../../../data/types';
-import { fbm, hash, S, sstep, surf, toTextures, wrap, type Surf, type TexSet } from '../textures';
+import { fbm, hash, sstep, surf, toTextures, wrap, type Surf, type TexSet } from '../textures';
+
+// ponytail: 256² over 2 units = 128 px/unit, about the bake density (120 at 1440p); 4x cheaper than the units' 512².
+// The noise is resolution-independent (u, v in [0,1)), so raise N for a denser bake. Normal strengths are tuned at 512
+// and scaled by NK (a Sobel gradient per texel grows as texels get bigger).
+const N = 256;
+const NK = N / 512;
 
 export interface TerrainSets { ground: TexSet; path: TexSet; rock: TexSet }
 
@@ -31,11 +37,11 @@ function worley(u: number, v: number, c: number, seed: number): { d1: number; d2
 
 /** Fill a surface per texel; f returns [height, colour, roughness, glow]. */
 function paint(f: (u: number, v: number) => [number, RGB, number, number]): { s: Surf; glow: Float32Array } {
-  const s = surf();
-  const glow = new Float32Array(S * S);
-  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-    const i = y * S + x;
-    const [h, c, r, g] = f(x / S, y / S);
+  const s = surf(N);
+  const glow = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const i = y * N + x;
+    const [h, c, r, g] = f(x / N, y / N);
     s.h[i] = h; s.r[i] = Math.min(1, c[0]); s.g[i] = Math.min(1, c[1]); s.b[i] = Math.min(1, c[2]);
     s.rough[i] = r; s.metal[i] = 0; glow[i] = g;
   }
@@ -78,7 +84,7 @@ function ground(biome: Biome, p: MapPalette, seed: number): TexSet {
       const ash = pebbles(u, v, 60, seed + 5, 0.26);
       let c = mul(base, 0.85 + (mid - 0.5) * 0.4 + (grain - 0.5) * 0.18 + pl.id * 0.12);
       if (ash.h > 0) c = mix(c, ash.tone > 0.85 ? mul(base, 1.35) : mul(base, 0.6), sstep(0, 0.3, ash.h) * 0.8);
-      c = mix(c, [0.05, 0.03, 0.03], crack * 0.6);
+      c = mix(c, [0.05, 0.03, 0.03], crack * 0.4);
       return [mid * 0.3 + grain * 0.2 + ash.h * 0.4 - crack * 0.9 + (1 - crack) * pl.d1 * 0.15, c, 0.92 - crack * 0.1, core * sstep(0.35, 0.55, fbm(u, v, 3, seed + 6))];
     }
     // crystal: creep — low organic swells crossed by a ridged vein network, wet in the veins, rare glowing pustules.
@@ -92,7 +98,7 @@ function ground(biome: Biome, p: MapPalette, seed: number): TexSet {
     c = mul(c, 1 - Math.min(1, vein) * 0.35);
     return [swell * 0.8 + grain * 0.15 - Math.min(1, vein) * 0.35 + pusOn * 0.3, c, 0.6 - Math.min(1, vein) * 0.35 + grain * 0.1, pusOn];
   });
-  return toTextures(s, biome === 'volcanic' ? 2.2 : 1.8, { glow, heightInR: true });
+  return toTextures(s, (biome === 'volcanic' ? 2.2 : 1.8) * NK, { glow, heightInR: true });
 }
 
 function path(biome: Biome, p: MapPalette, seed: number): TexSet {
@@ -131,7 +137,7 @@ function path(biome: Biome, p: MapPalette, seed: number): TexSet {
     c = mix(c, mul(base, 0.35), Math.max(seam, crack) * 0.75);
     return [(1 - seam) * 0.8 - crack * 0.5 + grain * 0.08 - stain * 0.1, c, 0.6 + stain * -0.25 + seam * 0.2, 0];
   });
-  return toTextures(s, 1.8, { glow, heightInR: true });
+  return toTextures(s, 1.8 * NK, { glow, heightInR: true });
 }
 
 function rock(biome: Biome, p: MapPalette, seed: number): TexSet {
@@ -170,7 +176,7 @@ function rock(biome: Biome, p: MapPalette, seed: number): TexSet {
     c = mix(c, rgb(p.decor), vein * 0.7);
     return [facet * 1.4 - edge * 0.4 + grain * 0.2, c, 0.55 - vein * 0.35, vein];
   });
-  return toTextures(s, 2.4, { glow, heightInR: true });
+  return toTextures(s, 2.4 * NK, { glow, heightInR: true });
 }
 
 export function terrainSets(biome: Biome, p: MapPalette, seed: number): TerrainSets {

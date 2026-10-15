@@ -1,19 +1,22 @@
-// Renderer entry: owns the WebGL context, scene, lights, pixel pass, unit sprite atlas and interaction overlays.
-// Per frame: world (terrain, ground decals, hover/range/selection) at ~384p posterized -> unit sprites at native
-// resolution -> overlay layer (airborne FX, HP bars) at ~384p over them, depth-tested against the world and the
-// sprites' silhouettes.
+// Renderer entry: owns the WebGL context, scene, the two load-time bakes (unit sprite atlas, pre-rendered HD terrain)
+// and the interaction overlays. Everything draws at native resolution, straight to the canvas:
+//   world (layer 0): baked terrain quad -> terrain occluders (depth only) -> live terrain bits (pad lights, portal rings,
+//     core glow), hover/range/selection, ground decals
+//   unit sprites (painter-sorted, no depth) -> their opaque silhouettes into depth
+//   overlay (layer OVERLAY_LAYER): airborne FX, HP bars, depth-tested against terrain, props and unit silhouettes
+// No real-time lights or shadows: both bakes carry the map's sun + hemi light.
 import * as THREE from 'three';
 import { ENEMIES, TOWER_LIST } from '../data';
 import type { EnemyId, MapDef } from '../data/types';
 import type { GameState } from '../sim/types';
 import { createCameraRig, DEFAULT_PPU } from './camera';
 import { bakeAtlas, enemyEntry, makeMaterials, towerEntry } from './hd';
+import { createMapTerrain } from './hd/terrain/bake';
 import { createInterp, type Interp } from './interp';
-import { createPixelPass, OVERLAY_LAYER } from './pixel';
-import { createTerrain } from './terrain';
 import { createUnits } from './units';
+import { OVERLAY_LAYER, viewGrid } from './view';
 
-const SUN_DIR = new THREE.Vector3(-6, 14, -5); // key light from screen upper-left: shadows fall down-right
+const SUN_DIR = new THREE.Vector3(-6, 14, -5); // baked key light from screen upper-left: shadows fall down-right
 const SUN_I = 3.2;
 const HEMI_I = 2.0;
 
@@ -33,12 +36,12 @@ export function mapEnemies(map: MapDef): EnemyId[] {
 export interface Renderer {
   /** Exposed so the FX module can add objects (layer OVERLAY_LAYER = drawn over the unit sprites). */
   readonly scene: THREE.Scene;
-  /** Per-frame stats (calls include the shadow pass and blit). */
+  /** Per-frame stats. */
   readonly info: THREE.WebGLInfo;
   /** Between-step smoothing for enemies/projectiles: main captures before each step and sets alpha. */
   readonly interp: Interp;
-  /** Sprite atlas bake stats (dev). */
-  readonly bake: { ms: number; mb: number; size: string; ppu: number };
+  /** Load-time bake stats (dev): sprite atlas, and the pre-rendered terrain under `terrain`. */
+  readonly bake: { ms: number; mb: number; size: string; ppu: number; terrain: { ms: number; mb: number; size: string; ppu: number } };
   render(state: GameState, frameDt: number): void;
   pickTile(clientX: number, clientY: number): { col: number; row: number } | null;
   setHover(tile: { col: number; row: number } | null, valid: boolean): void;
@@ -54,8 +57,8 @@ export interface Renderer {
 export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
   const gl = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
   gl.toneMapping = THREE.NoToneMapping;
-  gl.shadowMap.enabled = true;
-  gl.shadowMap.type = THREE.BasicShadowMap;
+  gl.shadowMap.enabled = true; // bakes only (soft PCF): the runtime scene has no lights
+  gl.shadowMap.type = THREE.PCFShadowMap;
   gl.info.autoReset = false;
   const canvas = gl.domElement;
   canvas.style.display = 'block';
@@ -78,25 +81,6 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
     }),
   );
   if (rect.x0 < rect.x1) rig.frame(rect, core);
-  const pixel = createPixelPass();
-
-  // Lighting: hard key from screen upper-left (shadows fall down-right) + biome hemisphere fill.
-  const cx = map.cols / 2;
-  const cz = map.rows / 2;
-  const sun = new THREE.DirectionalLight(p.keyLight, SUN_I);
-  sun.position.set(cx, 0, cz).add(SUN_DIR);
-  sun.target.position.set(cx, 0, cz);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
-  sun.shadow.bias = -0.0005;
-  sun.shadow.normalBias = 0.02;
-  const ext = Math.max(map.cols, map.rows) / 2 + 3;
-  Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 40 });
-  sun.shadow.camera.updateProjectionMatrix();
-  scene.add(sun, sun.target, new THREE.HemisphereLight(p.hemiSky, p.hemiGround, HEMI_I));
-
-  const terrain = createTerrain(map);
-  scene.add(terrain.group);
   const interp = createInterp();
 
   // --- interaction overlays -----------------------------------------------------------------
@@ -131,54 +115,54 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
   // --- sizing -------------------------------------------------------------------------------
   const size = new THREE.Vector2();
   const insetCss = { top: 0, bottom: 0 };
-  let rtH = 1;
+  let grid = viewGrid(1, 1);
   function resize(): void {
     gl.setPixelRatio(window.devicePixelRatio);
     gl.setSize(container.clientWidth, container.clientHeight, false);
     canvas.style.width = '100%';
     canvas.style.height = '100%';
     gl.getDrawingBufferSize(size);
-    const { w, h } = pixel.resize(size.x, size.y);
-    rtH = h;
-    rig.setTargetSize(w, h);
-    const k = h / Math.max(1, container.clientHeight);
+    grid = viewGrid(size.x, size.y);
+    rig.setTargetSize(grid.w, grid.h);
+    const k = grid.h / Math.max(1, container.clientHeight);
     rig.setInsets(insetCss.top * k, insetCss.bottom * k);
   }
   resize();
 
-  // --- unit sprites: HD models baked once per map (all tower levels + this map's enemies) at the screen's density ---
+  // --- load-time bakes, both at the screen's density and lit by the map's sun + hemi light ----------------------------
+  // Unit sprites: HD models (all tower levels + this map's enemies). Terrain: the HD map scene, pre-rendered once at the
+  // screen's px/unit at the default zoom (texels 1:1 there; the camera's texel-snapped pan keeps them aligned).
   const t0 = performance.now();
-  const ppu = THREE.MathUtils.clamp(Math.round((size.y / rtH) * DEFAULT_PPU), 96, 128);
-  const mats = makeMaterials(gl);
+  const ppu = THREE.MathUtils.clamp(Math.round(grid.scale * DEFAULT_PPU), 96, 128);
+  const lights = { dir: SUN_DIR, sunColor: p.keyLight, sunI: SUN_I, sky: p.hemiSky, ground: p.hemiGround, hemiI: HEMI_I };
+  const mats = makeMaterials(gl); // shared by both bakes
   const entries = [
     ...TOWER_LIST.flatMap((t) => ([1, 2, 3] as const).map((lv) => towerEntry(t.id, lv))),
     ...mapEnemies(map).map(enemyEntry),
   ];
-  gl.shadowMap.type = THREE.PCFShadowMap; // soft baked shadows; the terrain keeps its hard Basic ones
-  const atlas = bakeAtlas(gl, entries, mats, { dir: SUN_DIR, sunColor: p.keyLight, sunI: SUN_I, sky: p.hemiSky, ground: p.hemiGround, hemiI: HEMI_I }, ppu);
-  gl.shadowMap.type = THREE.BasicShadowMap;
+  const atlas = bakeAtlas(gl, entries, mats, lights, ppu);
+  const atlasMs = Math.round(performance.now() - t0);
+  // ponytail: capped at 180 px/unit (4K stays 1:1, ~50 MB); bigger screens magnify it slightly, as the sprites (cap 128)
+  const terrain = createMapTerrain(gl, map, mats, lights, Math.min(180, grid.scale * DEFAULT_PPU));
+  scene.add(terrain.group);
   for (const m of Object.values(mats)) {
     for (const v of Object.values(m)) if (v instanceof THREE.Texture) v.dispose();
     m.dispose();
   }
-  const bake = { ms: Math.round(performance.now() - t0), mb: +(atlas.bytes / 1048576).toFixed(1), size: atlas.size, ppu };
-  // Only the terrain casts now and it never moves: render its shadow map once (also keeps the overlay pass, which
-  // sees no casters, from re-rendering it).
-  gl.shadowMap.autoUpdate = false;
-  gl.shadowMap.needsUpdate = true;
+  const bake = { ms: atlasMs, mb: +(atlas.bytes / 1048576).toFixed(1), size: atlas.size, ppu, terrain: terrain.stats };
   gl.autoClear = false; // the world pass clears via scene.background; sprites and overlay composite over it
 
   const units = createUnits(scene, interp, atlas, terrain.topAt);
   const spriteScene = new THREE.Scene().add(units.sprites);
-  // The canvas shows only uvScale of the low-res target: crop the sprite camera's frustum to match.
-  const spriteCam = new THREE.OrthographicCamera();
-  const syncSpriteCam = (): void => {
+  // The rig sizes its camera for the whole view grid; the canvas shows only the grid's crop: draw with a cropped copy.
+  const viewCam = new THREE.OrthographicCamera();
+  const syncViewCam = (): void => {
     const { left, right, top, bottom, near, far } = camera;
-    Object.assign(spriteCam, { left, bottom, near, far, right: left + (right - left) * pixel.uvScale.x, top: bottom + (top - bottom) * pixel.uvScale.y });
-    spriteCam.updateProjectionMatrix();
-    spriteCam.position.copy(camera.position);
-    spriteCam.quaternion.copy(camera.quaternion);
-    spriteCam.updateMatrixWorld();
+    Object.assign(viewCam, { left, bottom, near, far, right: left + (right - left) * grid.cropX, top: bottom + (top - bottom) * grid.cropY });
+    viewCam.updateProjectionMatrix();
+    viewCam.position.copy(camera.position);
+    viewCam.quaternion.copy(camera.quaternion);
+    viewCam.updateMatrixWorld();
   };
 
   const ro = new ResizeObserver(resize);
@@ -209,36 +193,29 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
 
       const sel = selectedId === null ? null : units.towerPosition(selectedId);
       selection.visible = sel !== null;
-      if (sel) selection.position.set(sel.x, sel.y + 0.012, sel.z);
+      if (sel) selection.position.set(sel.x, sel.y + 0.02, sel.z);
       if (hover.visible) hoverMat.opacity = 0.28 + Math.sin(clock * 6) * 0.08;
 
       gl.info.reset();
-      camera.layers.set(0);
-      gl.setRenderTarget(pixel.target);
-      gl.render(scene, camera);
-      pixel.blit(gl);
-      syncSpriteCam();
-      gl.render(spriteScene, spriteCam);
-      // overlay: same target re-cleared to transparent, world depth kept so FX still hide behind terrain; the unit
-      // sprites' silhouettes go into that depth too, so a shot or blast behind a tower/enemy hides behind it
-      gl.setRenderTarget(pixel.target);
-      gl.setClearColor(0x000000, 0);
-      gl.clear(true, false, false);
+      syncViewCam();
+      gl.setRenderTarget(null);
+      gl.render(scene, viewCam); // world: clears to the void colour, terrain quad + occluder depth, decals, overlays
+      gl.render(spriteScene, viewCam);
+      // the unit sprites' silhouettes go into the depth too, so a shot or blast behind a tower/enemy hides behind it
       spriteScene.overrideMaterial = units.spriteDepth;
-      gl.render(spriteScene, camera);
+      gl.render(spriteScene, viewCam);
       spriteScene.overrideMaterial = null;
-      camera.layers.set(OVERLAY_LAYER);
+      viewCam.layers.set(OVERLAY_LAYER);
       scene.background = null;
-      gl.render(scene, camera);
+      gl.render(scene, viewCam);
       scene.background = bg;
-      camera.layers.set(0);
-      pixel.blitOverlay(gl);
+      viewCam.layers.set(0);
     },
     pickTile(clientX, clientY) {
       const r = canvas.getBoundingClientRect();
-      // Canvas shows only uvScale of the target (crop), so map CSS px -> target UV -> NDC.
-      const u = ((clientX - r.left) / r.width) * pixel.uvScale.x;
-      const vv = (1 - (clientY - r.top) / r.height) * pixel.uvScale.y;
+      // Canvas shows only the grid's crop, so map CSS px -> grid UV -> NDC of the uncropped camera.
+      const u = ((clientX - r.left) / r.width) * grid.cropX;
+      const vv = (1 - (clientY - r.top) / r.height) * grid.cropY;
       ndc.set(u * 2 - 1, vv * 2 - 1);
       ray.setFromCamera(ndc, camera);
       if (!ray.ray.intersectPlane(ground, hit)) return null;
@@ -249,7 +226,7 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
     setHover(tile, valid) {
       hover.visible = tile !== null;
       if (!tile) return;
-      hover.position.set(tile.col + 0.5, terrain.topAt(tile.col, tile.row) + 0.02, tile.row + 0.5);
+      hover.position.set(tile.col + 0.5, terrain.topAt(tile.col, tile.row) + 0.04, tile.row + 0.5); // clears ground bumps
       const c = valid ? '#3cff6e' : '#ff3a2a';
       hoverMat.color.set(c);
       hoverEdgeMat.color.set(c);
@@ -271,8 +248,8 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
       v.set(x, height, y).project(camera);
       const r = canvas.getBoundingClientRect();
       return {
-        x: (((v.x + 1) / 2) / pixel.uvScale.x) * r.width,
-        y: (1 - (v.y + 1) / 2 / pixel.uvScale.y) * r.height,
+        x: (((v.x + 1) / 2) / grid.cropX) * r.width,
+        y: (1 - (v.y + 1) / 2 / grid.cropY) * r.height,
       };
     },
     dispose() {
@@ -281,7 +258,6 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
       units.dispose();
       atlas.dispose();
       terrain.dispose();
-      pixel.dispose();
       [hoverGeo, hoverEdgeGeo, ringGeo, discGeo, selGeo, hoverMat, hoverEdgeMat, ringMat, discMat, selMat].forEach((d) => d.dispose());
       gl.dispose();
       gl.forceContextLoss(); // free the context now; browsers cap live WebGL contexts (~16)

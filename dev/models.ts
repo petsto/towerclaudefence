@@ -1,5 +1,5 @@
 // HD model showroom. Left: real-time close-up of the model(s) (turntable, walk cycle). Right: the same units baked
-// into the sprite atlas and drawn over the pixel terrain, exactly as the game will.
+// into the sprite atlas and drawn over the baked HD terrain, exactly as the game does.
 //   ?unit=<towerId|enemyId>  focus one unit (one copy per baked yaw frame); omit for every unit in a grid
 //   &level=1|2|3             tower level (focus)          &zoom=24|32|40  sprite pane game zoom (default 40 focus, 24 grid)
 //   &ppu=<n>                 bake px per unit (default: the sprite pane's screen density, as the game will)
@@ -12,8 +12,8 @@ import {
   bakeAtlas, builtToGroup, createSprites, ENEMY_YAW, enemyBuilt, enemyEntry, enemyFrame, makeMaterials,
   TOWER_BASE, TOWER_YAW, towerBuilt, towerEntry, towerFrame, towerKey, WALK, type BakeEntry, type Built, type Level, type SpriteItem,
 } from '../src/render/hd';
-import { createPixelPass } from '../src/render/pixel';
-import { createTerrain } from '../src/render/terrain';
+import { createMapTerrain } from '../src/render/hd/terrain/bake';
+import { viewGrid } from '../src/render/view';
 
 const q = new URLSearchParams(location.search);
 const TOWER_IDS = TOWER_LIST.map((t) => t.id);
@@ -110,24 +110,20 @@ const rtCam = new THREE.OrthographicCamera();
 const fit = new THREE.Box3().setFromObject(live[0]!.root).getSize(new THREE.Vector3());
 const RT_VIEW = GRID ? [15, 9] : [1, 1].map(() => Math.max(fit.x, fit.y, fit.z) * 1.5); // world units that must fit (w, h)
 
-// --- right pane: sprites over the pixel terrain ------------------------------------------------------------------
+// --- right pane: sprites over the baked HD terrain ------------------------------------------------------------------
 const spScene = new THREE.Scene();
 spScene.background = new THREE.Color(pal.void);
-lights(spScene, new THREE.Vector3(map.cols / 2, 0, map.rows / 2), Math.max(map.cols, map.rows) / 2 + 3);
-const terrain = createTerrain(map);
-spScene.add(terrain.group);
-const px = createPixelPass();
 const spCam = new THREE.OrthographicCamera();
 const spriteScene = new THREE.Scene();
 const size = new THREE.Vector2();
-let rtW = 1, rtH = 1;
+let scale = 1; // screen px per view-grid texel, as the game
 
 function layout(): void {
   gl.setSize(innerWidth, innerHeight);
   gl.getDrawingBufferSize(size);
   const lw = Math.round(size.x * SPLIT);
-  ({ w: rtW, h: rtH } = px.resize(size.x - lw, size.y));
-  const w = rtW / ZOOM, h = rtH / ZOOM;
+  scale = viewGrid(size.x - lw, size.y).scale;
+  const w = (size.x - lw) / (scale * ZOOM), h = size.y / (scale * ZOOM);
   Object.assign(spCam, { left: -w / 2, right: w / 2, top: h / 2, bottom: -h / 2, near: 1, far: 200 });
   spCam.updateProjectionMatrix();
   spCam.position.set(centre.x, 60 * Math.sin(PITCH), centre.z + 60 * Math.cos(PITCH));
@@ -142,13 +138,16 @@ function layout(): void {
 layout();
 
 // bake at the sprite pane's on-screen density (physical px per world unit), as the game does
-const ppu = Number(q.get('ppu') ?? Math.round(((size.y / rtH) * ZOOM)));
+const ppu = Number(q.get('ppu') ?? scale * ZOOM);
 const entries: BakeEntry[] = [];
 for (const s of slots) {
   const key = s.tower ? towerKey(s.tower, s.level!) : s.enemy!;
   if (!entries.some((e) => e.key === key)) entries.push(s.tower ? towerEntry(s.tower, s.level!) : enemyEntry(s.enemy!));
 }
-const atlas = bakeAtlas(gl, entries, mats, { dir: SUN_DIR, sunColor: pal.keyLight, sunI: SUN_I, sky: pal.hemiSky, ground: pal.hemiGround, hemiI: HEMI_I }, ppu);
+const bakeLights = { dir: SUN_DIR, sunColor: pal.keyLight, sunI: SUN_I, sky: pal.hemiSky, ground: pal.hemiGround, hemiI: HEMI_I };
+const atlas = bakeAtlas(gl, entries, mats, bakeLights, ppu);
+const terrain = createMapTerrain(gl, map, mats, bakeLights, ppu);
+spScene.add(terrain.group);
 const sprites = createSprites(atlas, slots.length * 2);
 spriteScene.add(sprites.mesh);
 
@@ -164,7 +163,7 @@ document.getElementById('hud-rt')!.textContent = GRID ? `real-time, ${live.lengt
 const hudSp = document.getElementById('hud-sp')!;
 hudSp.style.left = `${SPLIT * 100}%`;
 hudSp.style.marginLeft = '8px';
-hudSp.textContent = `sprites over pixel terrain (zoom ${ZOOM})\natlas ${atlas.size} ${stats.mb} MB  bake ${stats.bakeMs} ms  ${ppu} px/unit` +
+hudSp.textContent = `sprites over baked HD terrain (zoom ${ZOOM})\natlas ${atlas.size} ${stats.mb} MB  bake ${stats.bakeMs} ms  ${ppu} px/unit` +
   (GRID ? `  ${entries.length} entries` : `  cell ${stats.cells[entries[0]!.key]} px`);
 
 // --- loop --------------------------------------------------------------------------------------------------------
@@ -209,12 +208,9 @@ function draw(dt: number): void {
   const pr = gl.getPixelRatio();
   const lw = Math.round(size.x * SPLIT);
   gl.setScissorTest(true);
-  gl.setRenderTarget(px.target);
-  gl.clear();
-  gl.render(spScene, spCam);
   gl.setViewport(lw / pr, 0, (size.x - lw) / pr, size.y / pr);
   gl.setScissor(lw / pr, 0, (size.x - lw) / pr, size.y / pr);
-  px.blit(gl);
+  gl.render(spScene, spCam); // the void background clears the pane
   gl.render(spriteScene, spCam);
   gl.setViewport(0, 0, lw / pr, size.y / pr);
   gl.setScissor(0, 0, lw / pr, size.y / pr);

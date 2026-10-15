@@ -1,14 +1,17 @@
 // Transient VFX driven by SimEvents + live projectiles. Everything is pooled with fixed caps and
-// drawn in 11 batched draw calls (2 Points, 1 LineSegments, 8 InstancedMesh). No allocation per event.
+// drawn in 11 batched draw calls (2 Points, 1 fat LineSegments2, 8 InstancedMesh). No allocation per event.
 // World: 1 unit = 1 tile, +Y up, sim (x, y) -> world (x, ?, y).
 import * as THREE from 'three';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { ENEMIES } from '../data';
 import type { DamageType, EnemyId, MapDef, TowerId } from '../data/types';
 import type { GameState, SimEvent } from '../sim/types';
 import { bounds, enemyBuilt, TOWER_YAW, towerBuilt, towerFrame } from './hd';
 import type { Interp } from './interp';
-import { OVERLAY_LAYER } from './pixel';
-import { PAD_Y, PATH_Y } from './terrain';
+import { OVERLAY_LAYER } from './view';
+import { PAD_Y, PATH_Y } from './hd/terrain/build';
 
 export interface Fx {
   handle(events: readonly SimEvent[], state: GameState): void;
@@ -350,13 +353,20 @@ interface Bolt {
 function boltSystem(cap: number, maxVerts: number) {
   const pos = new Float32Array(maxVerts * 3);
   const col = new Float32Array(maxVerts * 3);
-  const geo = new THREE.BufferGeometry();
-  const posA = new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage);
-  const colA = new THREE.BufferAttribute(col, 3).setUsage(THREE.DynamicDrawUsage);
-  geo.setAttribute('position', posA).setAttribute('color', colA);
-  geo.setDrawRange(0, 0);
-  const mat = new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
-  const lines = new THREE.LineSegments(geo, mat);
+  // Screen-space fat lines (native resolution would make GL lines 1 px hairlines): the geometry wraps pos/col as
+  // per-segment instance buffers (xyz xyz / rgb rgb), so filling them in place is enough.
+  const geo = new LineSegmentsGeometry().setPositions(pos).setColors(col);
+  const posB = (geo.attributes.instanceStart as THREE.InterleavedBufferAttribute).data;
+  const colB = (geo.attributes.instanceColorStart as THREE.InterleavedBufferAttribute).data;
+  posB.setUsage(THREE.DynamicDrawUsage);
+  colB.setUsage(THREE.DynamicDrawUsage);
+  geo.instanceCount = 0;
+  const mat = new LineMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+  const lines = new LineSegments2(geo, mat);
+  lines.onBeforeRender = (renderer) => {
+    LineSegments2.prototype.onBeforeRender.call(lines, renderer); // resolution = viewport (CSS px)
+    mat.linewidth = Math.max(1, mat.resolution.y / 480); // ~3 physical px at 1440p, at any DPR
+  };
   lines.frustumCulled = false;
   lines.renderOrder = 13;
   const pool: Bolt[] = Array.from({ length: cap }, () => ({
@@ -420,8 +430,8 @@ function boltSystem(cap: number, maxVerts: number) {
       polyline(b, b.ca, k, 0);
       if (b.cb) polyline(b, b.cb, k, 0.04);
     }
-    geo.setDrawRange(0, v);
-    posA.needsUpdate = colA.needsUpdate = true;
+    geo.instanceCount = v / 2;
+    posB.needsUpdate = colB.needsUpdate = true;
   }
   return { object: lines, start, point, update };
 }
@@ -429,21 +439,27 @@ function boltSystem(cap: number, maxVerts: number) {
 // ---------------------------------------------------------------- geometry helpers
 
 function splatGeometry(): THREE.BufferGeometry {
-  // Irregular 7-gon goo blot: dark centre, body-colour rim. Flat on the ground.
-  const sides = 7;
+  // Irregular goo blot, flat on the ground: dark wet centre, body-colour ring, feathered (alpha 0) rim so it soaks into
+  // the HD terrain instead of reading as a flat polygon. RGBA vertex colours.
+  const sides = 16;
+  const dark = COL.chorusDark, body = COL.chorusBody;
   const pos = [0, 0, 0];
-  const col = [COL.chorusDark.r, COL.chorusDark.g, COL.chorusDark.b];
+  const col = [dark.r, dark.g, dark.b, 0.9];
   for (let i = 0; i < sides; i++) {
     const a = (i / sides) * Math.PI * 2;
-    const r = 0.75 + ((i * 37) % 7) / 14;
-    pos.push(Math.cos(a) * r, 0, Math.sin(a) * r);
-    col.push(COL.chorusBody.r, COL.chorusBody.g, COL.chorusBody.b);
+    const r = 0.62 + 0.18 * Math.sin(i * 2.3) * Math.sin(i * 1.7 + 1); // lumpy, deterministic
+    pos.push(Math.cos(a) * r, 0, Math.sin(a) * r, Math.cos(a) * (r + 0.35), 0, Math.sin(a) * (r + 0.35));
+    col.push(body.r, body.g, body.b, 0.8, body.r, body.g, body.b, 0);
   }
   const idx: number[] = [];
-  for (let i = 0; i < sides; i++) idx.push(0, 1 + ((i + 1) % sides), 1 + i);
+  for (let i = 0; i < sides; i++) {
+    const j = (i + 1) % sides;
+    const a = 1 + i * 2, b = 1 + j * 2; // inner ring vertex; +1 = its feathered outer twin
+    idx.push(0, b, a, a, b, a + 1, b, b + 1, a + 1);
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
   g.setIndex(idx);
   return g;
 }
@@ -455,7 +471,7 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
   const glow = particleSystem(2048, true);
   const dust = particleSystem(512, false);
   const bolts = boltSystem(96, 4096);
-  const spheres = pulseSystem(64, new THREE.IcosahedronGeometry(1, 0));
+  const spheres = pulseSystem(64, new THREE.IcosahedronGeometry(1, 2)); // round at native res (detail 0 reads as a hexagon)
   const rings = pulseSystem(64, new THREE.RingGeometry(0.8, 1, 20).rotateX(-Math.PI / 2));
   const debris = chunkSystem(256, new THREE.BoxGeometry(1, 1, 1), false);
   const gibs = chunkSystem(192, new THREE.TetrahedronGeometry(0.7, 0), false);
@@ -464,7 +480,7 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
   const splatCap = 64;
   const splatMesh = new THREE.InstancedMesh(
     splatGeometry(),
-    new THREE.MeshBasicMaterial({ vertexColors: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
+    new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 }),
     splatCap,
   );
   splatMesh.frustumCulled = false;
