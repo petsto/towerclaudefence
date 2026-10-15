@@ -335,6 +335,8 @@ export function createSim(config: SimConfig) {
     } else if (t.cooldown <= EPS) {
       const targets = ranked();
       if (targets.length > 0) {
+        // Face the first target before firing: a kill shot clears targetId, so the aim below would keep the old angle.
+        t.rotation = Math.atan2(targets[0]!.y - cy, targets[0]!.x - cx);
         fire(t, lvl, targets);
         t.cooldown = lvl.cooldown;
       }

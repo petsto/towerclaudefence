@@ -151,7 +151,7 @@ export const cinderForge: MapDef = {
     decor: '#1E1B1A',
     accent: '#FF5A1F',
     core: '#FFB347',
-    cliff: '#2a2626',
+    cliff: '#2e2222',
     keyLight: '#ffd0a0',
     hemiSky: '#8a7a70',
     hemiGround: '#1a1210',
