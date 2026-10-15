@@ -12,12 +12,12 @@ describe('economy', () => {
 
   test('build validates tile, occupancy and cash', () => {
     const { game, state } = setup();
-    expect(game.dispatch({ type: 'build', defId: 'picket', col: 0, row: 0 })).toEqual({ ok: false, error: 'cannot build here' });
+    expect(game.dispatch({ type: 'build', defId: 'picket', col: 0, row: 0 })).toEqual({ ok: false, error: 'Cannot build there' });
     expect(game.dispatch({ type: 'build', defId: 'longshot', col: 1, row: 0 }).ok).toBe(true);
     expect(game.dispatch({ type: 'build', defId: 'picket', col: 1, row: 0 }).ok).toBe(false);
     expect(game.dispatch({ type: 'build', defId: 'longshot', col: 2, row: 0 }).ok).toBe(true);
     expect(state.cash).toBe(150);
-    expect(game.dispatch({ type: 'build', defId: 'longshot', col: 3, row: 0 })).toEqual({ ok: false, error: 'insufficient cash' });
+    expect(game.dispatch({ type: 'build', defId: 'longshot', col: 3, row: 0 })).toEqual({ ok: false, error: 'Not enough credits' });
     expect(state.cash).toBe(150);
     expect(state.towers).toHaveLength(2);
     expect(game.canBuild(1, 0)).toBe(false);
@@ -39,19 +39,31 @@ describe('economy', () => {
     expect(game.dispatch({ type: 'sell', towerId: 2 }).ok).toBe(false);
   });
 
-  test('upgrade costs, re-arms undo, caps at L3', () => {
+  test('upgrade costs, undo covers only spend since the last spawn, caps at L3', () => {
     const { game, state } = setup();
     game.dispatch({ type: 'build', defId: 'picket', col: 1, row: 0 });
     game.dispatch({ type: 'callWave' });
     game.step();
     expect(game.dispatch({ type: 'upgrade', towerId: 1 }).ok).toBe(true);
     expect(state.cash).toBe(425);
-    expect(state.towers[0]!.sellValue).toBe(175); // undo covers everything invested
+    expect(state.towers[0]!.sellValue).toBe(75 + 70); // upgrade at 100%, the older build at 70%
     game.dispatch({ type: 'upgrade', towerId: 1 });
+    expect(state.towers[0]!.sellValue).toBe(75 + 125 + 70); // both upgrades in the same no-spawn window
     expect(state.towers[0]!.level).toBe(3);
-    expect(game.dispatch({ type: 'upgrade', towerId: 1 })).toEqual({ ok: false, error: 'max level' });
+    expect(game.dispatch({ type: 'upgrade', towerId: 1 })).toEqual({ ok: false, error: 'Maximum level reached' });
     run(game, 30); // more spawns
     expect(state.towers[0]!.sellValue).toBe(210); // floor(300 * 0.7)
+  });
+
+  test('regression: upgrade-then-sell does not refund an old purchase in full', () => {
+    const { game, state } = setup();
+    game.dispatch({ type: 'build', defId: 'picket', col: 1, row: 0 });
+    game.dispatch({ type: 'callWave' });
+    run(game, 60);
+    const cash = state.cash;
+    game.dispatch({ type: 'upgrade', towerId: 1 });
+    game.dispatch({ type: 'sell', towerId: 1 });
+    expect(state.cash).toBe(cash + 70); // same as selling outright: -75 + 75 + floor(100 * 0.7)
   });
 
   test('upgrade rejects when broke', () => {
@@ -59,7 +71,7 @@ describe('economy', () => {
     game.dispatch({ type: 'build', defId: 'breacher', col: 1, row: 0 });
     game.dispatch({ type: 'build', defId: 'breacher', col: 2, row: 0 });
     game.dispatch({ type: 'build', defId: 'breacher', col: 3, row: 0 });
-    expect(game.dispatch({ type: 'upgrade', towerId: 1 })).toEqual({ ok: false, error: 'insufficient cash' });
+    expect(game.dispatch({ type: 'upgrade', towerId: 1 })).toEqual({ ok: false, error: 'Not enough credits' });
     expect(state.towers[0]!.level).toBe(1);
   });
 
@@ -115,7 +127,7 @@ describe('waves', () => {
     expect(state.nextWaveIn).toBe(WAVE_COUNTDOWN);
   });
 
-  test('HP scales by difficulty and growth^(wave-1); mid boss x0.5 HP with flat bounty', () => {
+  test('HP scales by difficulty and growth^(wave-1); mid boss x0.55 HP with flat bounty', () => {
     const { game, state } = setup();
     state.waveIndex = 6; // launch wave 8 (mid boss)
     game.dispatch({ type: 'callWave' });
@@ -139,7 +151,7 @@ describe('waves', () => {
     const { game, state } = setup();
     expect(state.nextWaveIn).toBeNull();
     game.dispatch({ type: 'callWave' });
-    expect(game.dispatch({ type: 'callWave' })).toEqual({ ok: false, error: 'wave still spawning' });
+    expect(game.dispatch({ type: 'callWave' })).toEqual({ ok: false, error: 'Wave still deploying' });
     runUntil(game, () => state.nextWaveIn !== null);
     run(game, 600); // skitterlings still walking: held
     expect(state.nextWaveIn).toBe(WAVE_COUNTDOWN);

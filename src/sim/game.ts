@@ -20,7 +20,7 @@ import {
   WAVE_COUNTDOWN,
   WAVE_MAX_HOLD,
 } from '../data';
-import type { DamageType, EnemyDef, EnemyId, TowerDef, TowerLevel } from '../data/types';
+import type { DamageType, DifficultyId, EnemyDef, EnemyId, TowerDef, TowerLevel } from '../data/types';
 import { FIXED_DT } from './constants';
 import { resolveHit } from './damage';
 import { buildPath, pointAt } from './path';
@@ -61,8 +61,10 @@ export interface Enemy extends Mutable<EnemyState> {
 export interface Tower extends Mutable<TowerState> {
   readonly def: TowerDef;
   invested: number;
-  /** Enemy id counter at buy/upgrade; undo applies while nothing has spawned since. */
+  /** Enemy id counter at the last buy/upgrade; undo applies while nothing has spawned since. */
   undoMark: number;
+  /** Credits spent in that no-spawn window (the part undo refunds in full). */
+  undoable: number;
   salvoLeft: number;
   salvoTimer: number;
 }
@@ -85,6 +87,12 @@ export interface SimState extends Mutable<Omit<GameState, 'towers' | 'enemies' |
 const ok: CommandResult = { ok: true };
 const fail = (error: string): CommandResult => ({ ok: false, error });
 const dist = (a: { x: number; y: number }, x: number, y: number) => Math.hypot(a.x - x, a.y - y);
+
+/** Credits CALL WAVE pays now: EARLY_CALL_PER_SECOND per whole second left, capped, scaled by difficulty. */
+export function earlyCallBonus(nextWaveIn: number | null, difficultyId: DifficultyId): number {
+  if (nextWaveIn === null) return 0;
+  return Math.floor(Math.min(EARLY_CALL_MAX, EARLY_CALL_PER_SECOND * Math.floor(nextWaveIn)) * DIFFICULTIES[difficultyId].cashMult);
+}
 
 export function createGame(config: SimConfig): Game {
   return createSim(config).game;
@@ -364,8 +372,10 @@ export function createSim(config: SimConfig) {
     else if (target) hit(target, p.damage, p.damageType, p.shieldMult, p.towerId);
   }
 
+  /** Spend since the last spawn refunds at UNDO_REFUND, everything older at SELL_REFUND. */
   function sellValue(t: Tower): number {
-    return t.undoMark === nextEnemyId ? t.invested * UNDO_REFUND : Math.floor(t.invested * SELL_REFUND);
+    const fresh = t.undoMark === nextEnemyId ? t.undoable : 0;
+    return fresh * UNDO_REFUND + Math.floor((t.invested - fresh) * SELL_REFUND);
   }
 
   function refreshSellValues() {
@@ -512,10 +522,10 @@ export function createSim(config: SimConfig) {
     switch (cmd.type) {
       case 'build': {
         const def = TOWERS[cmd.defId];
-        if (!def) return fail('unknown tower');
-        if (!canBuild(cmd.col, cmd.row)) return fail('cannot build here');
+        if (!def) return fail('Unknown structure');
+        if (!canBuild(cmd.col, cmd.row)) return fail('Cannot build there');
         const cost = def.levels[0].cost;
-        if (s.cash < cost) return fail('insufficient cash');
+        if (s.cash < cost) return fail('Not enough credits');
         s.cash -= cost;
         const t: Tower = {
           id: nextTowerId++,
@@ -533,6 +543,7 @@ export function createSim(config: SimConfig) {
           def,
           invested: cost,
           undoMark: nextEnemyId,
+          undoable: cost,
           salvoLeft: 0,
           salvoTimer: 0,
         };
@@ -542,20 +553,21 @@ export function createSim(config: SimConfig) {
       }
       case 'upgrade': {
         const t = s.towers.find((x) => x.id === cmd.towerId);
-        if (!t) return fail('no such tower');
-        if (t.level === 3) return fail('max level');
+        if (!t) return fail('No such structure');
+        if (t.level === 3) return fail('Maximum level reached');
         const cost = t.def.levels[t.level]!.cost;
-        if (s.cash < cost) return fail('insufficient cash');
+        if (s.cash < cost) return fail('Not enough credits');
         s.cash -= cost;
         t.level = t.level === 1 ? 2 : 3;
         t.invested += cost;
+        t.undoable = (t.undoMark === nextEnemyId ? t.undoable : 0) + cost;
         t.undoMark = nextEnemyId;
         emit({ type: 'upgrade', towerId: t.id, level: t.level });
         return ok;
       }
       case 'sell': {
         const t = s.towers.find((x) => x.id === cmd.towerId);
-        if (!t) return fail('no such tower');
+        if (!t) return fail('No such structure');
         const refund = sellValue(t);
         s.towers = s.towers.filter((x) => x !== t);
         s.cash += refund;
@@ -564,35 +576,34 @@ export function createSim(config: SimConfig) {
       }
       case 'setTargeting': {
         const t = s.towers.find((x) => x.id === cmd.towerId);
-        if (!t) return fail('no such tower');
+        if (!t) return fail('No such structure');
         t.targeting = cmd.mode;
         return ok;
       }
       case 'callWave': {
-        if (s.waveIndex >= s.waveCount - 1) return fail('no more waves');
-        if (spawner) return fail('wave still spawning');
-        const left = s.nextWaveIn;
-        launchWave(left === null ? 0 : scaleCash(Math.min(EARLY_CALL_MAX, EARLY_CALL_PER_SECOND * Math.floor(left))));
+        if (s.waveIndex >= s.waveCount - 1) return fail('No more waves');
+        if (spawner) return fail('Wave still deploying');
+        launchWave(earlyCallBonus(s.nextWaveIn, config.difficultyId));
         return ok;
       }
       case 'pause':
-        if (s.status !== 'playing') return fail('not playing');
+        if (s.status !== 'playing') return fail('Not playing');
         s.status = 'paused';
         return ok;
       case 'resume':
-        if (s.status !== 'paused') return fail('not paused');
+        if (s.status !== 'paused') return fail('Not paused');
         s.status = 'playing';
         return ok;
       case 'setSpeed':
-        if (![1, 2, 3].includes(cmd.speed)) return fail('invalid speed');
+        if (![1, 2, 3].includes(cmd.speed)) return fail('Invalid speed');
         s.speed = cmd.speed;
         return ok;
     }
   }
 
   function dispatch(cmd: Command): CommandResult {
-    if (s.status === 'victory' || s.status === 'defeat') return fail('game over');
-    if (s.status === 'paused' && cmd.type !== 'resume' && cmd.type !== 'setSpeed') return fail('paused');
+    if (s.status === 'victory' || s.status === 'defeat') return fail('Mission over');
+    if (s.status === 'paused' && cmd.type !== 'resume' && cmd.type !== 'setSpeed') return fail('Game paused');
     const r = apply(cmd);
     refreshSellValues();
     return r;

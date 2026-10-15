@@ -1,6 +1,6 @@
 /** Sell refund as a fraction of total invested. */
 export const SELL_REFUND = 0.7;
-/** Full refund if no enemy has spawned since the tower was bought or last upgraded. */
+/** Refund for credits spent on a tower since the last enemy spawn (undo); older spend refunds at SELL_REFUND. */
 export const UNDO_REFUND = 1;
 
 /** Wave-clear bonus for wave number w (1-based): WAVE_CLEAR_BASE + WAVE_CLEAR_PER_WAVE * w. */
