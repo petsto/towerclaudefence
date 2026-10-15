@@ -6,6 +6,7 @@ const SIN = Math.sin(PITCH);
 const COS = Math.cos(PITCH);
 const DIST = 60;
 const ZOOMS = [24, 32, 40] as const;
+const DEFAULT_ZOOM = 1;
 const EDGE_PX = 12;
 const PAN_SPEED = 14; // units/s at PPU 32
 
@@ -15,13 +16,18 @@ export interface CameraRig {
   setTargetSize(w: number, h: number): void;
   /** Low-res texels of screen covered by the bottom HUD; lets the last rows scroll above it. */
   setBottomInset(texels: number): void;
+  /**
+   * Keep this world rect (x = col, z = row) in view above the bottom inset, zooming out if needed; `keep` (the core)
+   * wins when it can't all fit. Re-applied on resize/inset until the player pans or zooms.
+   */
+  frame(rect: { x0: number; z0: number; x1: number; z1: number }, keep: { x: number; z: number }): void;
   update(dt: number): void;
   dispose(): void;
 }
 
 export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: number): CameraRig {
   const camera = new THREE.OrthographicCamera();
-  let zoom = 1;
+  let zoom = DEFAULT_ZOOM;
   let rtW = 1;
   let rtH = 1;
   let inset = 0;
@@ -30,6 +36,7 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
   let tz = rows / 2;
   const keys = new Set<string>();
   let pointer: { x: number; y: number } | null = null;
+  let focus: { rect: { x0: number; z0: number; x1: number; z1: number }; keep: { x: number; z: number } } | null = null;
 
   const ppu = (): number => ZOOMS[zoom]!;
 
@@ -44,7 +51,26 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
     return lo > hi ? (lo + hi) / 2 : Math.min(hi, Math.max(lo, v));
   }
 
+  function applyFocus(): void {
+    if (!focus) return;
+    const { rect: r, keep } = focus;
+    const viewW = (p: number): number => rtW / p;
+    const viewD = (p: number): number => (rtH - inset) / (p * SIN); // world z rows visible above the console
+    zoom = DEFAULT_ZOOM;
+    while (zoom > 0 && (r.x1 - r.x0 > viewW(ppu()) || r.z1 - r.z0 > viewD(ppu()))) zoom--;
+    size();
+    const p = ppu();
+    const w = viewW(p) / 2 - 0.5;
+    const d = viewD(p) / 2 - 0.5;
+    // centre the rect in the visible band, then pull back toward the core if the rect overflows
+    const cx = clampRange((r.x0 + r.x1) / 2, keep.x - w, keep.x + w);
+    const cz = clampRange((r.z0 + r.z1) / 2, keep.z - d, keep.z + d);
+    tx = cx;
+    tz = cz + inset / (2 * p * SIN); // the band's centre sits above the camera target by half the inset
+  }
+
   function place(): void {
+    applyFocus();
     const p = ppu();
     const viewW = rtW / p;
     const viewH = rtH / p;
@@ -75,6 +101,7 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
     e.preventDefault();
     const next = Math.min(ZOOMS.length - 1, Math.max(0, zoom + (e.deltaY < 0 ? 1 : -1)));
     if (next === zoom) return;
+    focus = null;
     zoom = next;
     size();
     place();
@@ -99,6 +126,10 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
       inset = texels;
       place();
     },
+    frame(rect, keep) {
+      focus = { rect, keep };
+      place();
+    },
     update(dt) {
       let dx = 0;
       let dz = 0;
@@ -114,6 +145,7 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
         else if (pointer.y > r.bottom - EDGE_PX) dz += 1;
       }
       if (dx === 0 && dz === 0) return;
+      focus = null;
       const step = (PAN_SPEED * (32 / ppu()) * Math.min(dt, 0.1)) / Math.hypot(Math.sign(dx), Math.sign(dz));
       tx += Math.sign(dx) * step;
       tz += (Math.sign(dz) * step) / SIN; // screen-equal speed on the foreshortened axis

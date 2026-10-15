@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { ENEMIES, MAPS } from '../data';
 import type { DamageType, EnemyId, MapId, TowerId } from '../data/types';
 import type { GameState, SimEvent } from '../sim/types';
+import type { Interp } from './interp';
+import { TOWER_RISE } from './models';
 
 export interface Fx {
   handle(events: readonly SimEvent[], state: GameState): void;
@@ -438,7 +440,8 @@ function corePosition(mapId: MapId): { x: number; y: number } {
 
 // ---------------------------------------------------------------- Fx
 
-export function createFx(scene: THREE.Scene): Fx {
+/** `interp` (optional) smooths projectile/slow-ring positions between sim steps, matching the units. */
+export function createFx(scene: THREE.Scene, interp?: Interp): Fx {
   const glow = particleSystem(2048, true);
   const dust = particleSystem(512, false);
   const bolts = boltSystem(96, 4096);
@@ -511,10 +514,10 @@ export function createFx(scene: THREE.Scene): Fx {
     return false;
   }
   const mz = { x: 0, y: 0, z: 0 };
-  function muzzle(t: { defId: TowerId; col: number; row: number; rotation: number }): void {
+  function muzzle(t: { defId: TowerId; level: 1 | 2 | 3; col: number; row: number; rotation: number }): void {
     const m = MUZZLE[t.defId];
     mz.x = t.col + 0.5 + Math.cos(t.rotation) * m.fwd;
-    mz.y = m.h;
+    mz.y = m.h + TOWER_RISE[t.level];
     mz.z = t.row + 0.5 + Math.sin(t.rotation) * m.fwd;
   }
 
@@ -588,7 +591,7 @@ export function createFx(scene: THREE.Scene): Fx {
     const b2 = bolts.start(COL.cyan, null, 0.12, 0.2, 6, true);
     const t = findTower(ev.towerId);
     ev.points.forEach((p, i) => {
-      const h = i === 0 ? (t ? MUZZLE[t.defId].h : 0.85) : 0.35;
+      const h = i === 0 ? (t ? MUZZLE[t.defId].h + TOWER_RISE[t.level] : 0.85) : 0.35;
       bolts.point(b1, p.x, h, p.y);
       bolts.point(b2, p.x, h, p.y);
       if (i > 0) {
@@ -653,6 +656,7 @@ export function createFx(scene: THREE.Scene): Fx {
         }
         case 'death': death(ev); break;
         case 'build':
+          spheres.spawn(ev.col + 0.5, 0.35, ev.row + 0.5, 0.15, 0.6, 0.22, COL.white, COL.teal, COL.blue); // construction flash
           rings.spawn(ev.col + 0.5, 0.05, ev.row + 0.5, 0.2, 0.75, 0.45, COL.white, COL.teal, COL.blue);
           glow.burst(10, ev.col + 0.5, 0.1, ev.row + 0.5, 1.6, COL.teal, COL.amber, 0.08, 0.6, -1, 1);
           dust.burst(8, ev.col + 0.5, 0.08, ev.row + 0.5, 1.4, COL.dust, COL.dust, 0.2, 0.8, -0.3, 0.2, 2.5);
@@ -696,7 +700,8 @@ export function createFx(scene: THREE.Scene): Fx {
       for (const e of state.enemies) {
         if (!e.slowed || n >= slowCap) continue;
         const r = enemyHeight(e.defId) * 1.1 * pulse;
-        _m.compose(_p.set(e.x, 0.04, e.y), _q.identity(), _s.set(r, 1, r));
+        const at = interp ? interp.enemy(e) : e;
+        _m.compose(_p.set(at.x, 0.04, at.y), _q.identity(), _s.set(r, 1, r));
         slowMesh.setMatrixAt(n++, _m);
       }
     }
@@ -709,21 +714,23 @@ export function createFx(scene: THREE.Scene): Fx {
     let ns = 0, nm = 0;
     if (state) {
       for (const p of state.projectiles) {
+        const at = interp ? interp.projectile(p) : p;
+        const px = at.x, py = at.y;
         const total = Math.hypot(p.targetX - p.originX, p.targetY - p.originY) || 1;
-        const t = Math.min(1, Math.hypot(p.x - p.originX, p.y - p.originY) / total);
+        const t = Math.min(1, Math.hypot(px - p.originX, py - p.originY) / total);
         if (p.kind === 'shell' && ns < projCap) {
           const y = 0.6 + (0.3 - 0.6) * t + (0.5 + 0.35 * total) * 4 * t * (1 - t);
-          _m.compose(_p.set(p.x, y, p.y), _q.identity(), _s.setScalar(1));
+          _m.compose(_p.set(px, y, py), _q.identity(), _s.setScalar(1));
           shellMesh.setMatrixAt(ns++, _m);
-          if (Math.random() < dt * 30) glow.spawn(p.x, y, p.y, 0, 0, 0, COL.amber, COL.red, 0.08, 0.3, 0.25, 0, 0);
+          if (Math.random() < dt * 30) glow.spawn(px, y, py, 0, 0, 0, COL.amber, COL.red, 0.08, 0.3, 0.25, 0, 0);
         } else if (p.kind === 'missile' && nm < projCap) {
           const y = 0.55 + (0.35 - 0.55) * t + 0.3 * 4 * t * (1 - t);
-          _dir.set(p.targetX - p.x, 0, p.targetY - p.y);
+          _dir.set(p.targetX - px, 0, p.targetY - py);
           const yaw = Math.atan2(-_dir.z, _dir.x);
           _q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, yaw);
-          _m.compose(_p.set(p.x, y, p.y), _q, _s.setScalar(1));
+          _m.compose(_p.set(px, y, py), _q, _s.setScalar(1));
           missileMesh.setMatrixAt(nm++, _m);
-          const bx = p.x - Math.cos(-yaw) * 0.14, bz = p.y - Math.sin(-yaw) * 0.14;
+          const bx = px - Math.cos(-yaw) * 0.14, bz = py - Math.sin(-yaw) * 0.14;
           glow.spawn(bx, y, bz, 0, 0, 0, COL.yellow, COL.red, 0.13, 0.3, 0.15, 0, 0);
           if (Math.random() < dt * 40) dust.spawn(bx, y, bz, rand(-0.1, 0.1), 0.25, rand(-0.1, 0.1), COL.smoke, COL.smoke, 0.1, 3, 0.7, 0, 1);
         }

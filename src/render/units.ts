@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import type { EnemyId, TowerId } from '../data/types';
 import type { EnemyState, GameState, TowerState } from '../sim/types';
+import type { Interp } from './interp';
 import { createEnemyGeometry, createTowerModel } from './models';
 import { PAD_Y, PATH_Y } from './terrain';
 
@@ -10,6 +11,10 @@ const BAR_H = 0.07;
 const SHIELD_H = 0.04;
 const FLASH_S = 0.06;
 const PITCH = THREE.MathUtils.degToRad(55);
+const BUILD_S = 0.4;
+const SELL_S = 0.35;
+const UPGRADE_S = 0.35;
+const TURN_RATE = 18; // 1/s, exponential ease of turret yaw toward the sim's (snapped) rotation
 
 /** One InstancedMesh per mesh of a (defId, level) model; turret parts get the yaw applied per instance. */
 interface TowerPart {
@@ -35,7 +40,21 @@ export interface Units {
   dispose(): void;
 }
 
-export function createUnits(scene: THREE.Scene): Units {
+/** Per-tower render-side animation state (sim snaps everything). */
+interface TowerAnim {
+  yaw: number;
+  level: 1 | 2 | 3;
+  built: number;
+  upgraded: number;
+  seen: number;
+  /** Last state, kept so a sold tower can sink out after it leaves the sim. */
+  last: TowerState;
+  sold: number;
+}
+
+const easeOutBack = (k: number): number => 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2;
+
+export function createUnits(scene: THREE.Scene, interp: Interp): Units {
   const towerKinds = new Map<string, TowerKind>();
   const towerPos = new Map<number, THREE.Vector3>();
   const kinds = new Map<EnemyId, EnemyKind>();
@@ -139,19 +158,63 @@ export function createUnits(scene: THREE.Scene): Units {
 
   const towerM = new THREE.Matrix4();
   const turretM = new THREE.Matrix4();
-  function syncTowers(list: readonly TowerState[]): void {
+  const anims = new Map<number, TowerAnim>();
+  let clock = 0;
+  const towerQ = new THREE.Quaternion();
+
+  function syncTowers(list: readonly TowerState[], dt: number, speed: number): void {
+    clock += dt;
+    for (const t of list) {
+      let a = anims.get(t.id);
+      if (!a) anims.set(t.id, (a = { yaw: t.rotation, level: t.level, built: clock, upgraded: -1, seen: frame, last: t, sold: -1 }));
+      if (a.level !== t.level) a.upgraded = clock;
+      a.level = t.level;
+      a.last = t;
+      a.seen = frame;
+      const d = Math.atan2(Math.sin(t.rotation - a.yaw), Math.cos(t.rotation - a.yaw));
+      a.yaw += d * (1 - Math.exp(-dt * speed * TURN_RATE));
+    }
+    for (const [id, a] of anims) {
+      if (a.seen === frame) continue;
+      if (a.sold < 0) a.sold = clock; // gone from the sim = sold: sink out
+      if (clock - a.sold > SELL_S) anims.delete(id);
+    }
+
     const need = new Map<string, number>();
-    for (const t of list) need.set(`${t.defId}:${t.level}`, (need.get(`${t.defId}:${t.level}`) ?? 0) + 1);
+    for (const a of anims.values()) need.set(`${a.last.defId}:${a.level}`, (need.get(`${a.last.defId}:${a.level}`) ?? 0) + 1);
     for (const k of towerKinds.values()) k.count = 0;
     for (const [key, n] of need) towerKind(key, key.split(':')[0] as TowerId, Number(key.split(':')[1]) as 1 | 2 | 3, n);
     towerPos.clear();
-    for (const t of list) {
-      const k = towerKinds.get(`${t.defId}:${t.level}`)!;
+    for (const [id, a] of anims) {
+      const t = a.last;
+      const k = towerKinds.get(`${t.defId}:${a.level}`)!;
       const i = k.count++;
-      towerM.makeTranslation(t.col + 0.5, PAD_Y, t.row + 0.5);
-      towerPos.set(t.id, new THREE.Vector3(t.col + 0.5, PAD_Y, t.row + 0.5));
+      const x = t.col + 0.5;
+      const z = t.row + 0.5;
+      // build: rise out of the pad with a slight overshoot; sell: sink and shrink; upgrade: one scale pulse
+      let sy = 1;
+      let sxz = 1;
+      let dy = 0;
+      const kb = Math.min(1, (clock - a.built) / BUILD_S);
+      if (kb < 1) {
+        sy = Math.max(0.05, easeOutBack(kb));
+        sxz = 0.7 + 0.3 * Math.min(1, kb * 2);
+        dy = -0.25 * (1 - kb);
+      }
+      if (a.upgraded >= 0 && clock - a.upgraded < UPGRADE_S) {
+        const p = 1 + 0.2 * Math.sin((Math.PI * (clock - a.upgraded)) / UPGRADE_S);
+        sy *= p;
+        sxz *= p;
+      }
+      if (a.sold >= 0) {
+        const ks = Math.min(1, (clock - a.sold) / SELL_S);
+        sy *= 1 - ks * 0.8;
+        sxz *= 1 - ks * 0.4;
+        dy -= 0.3 * ks * ks;
+      } else towerPos.set(id, new THREE.Vector3(x, PAD_Y, z));
+      towerM.compose(pos.set(x, PAD_Y + dy, z), towerQ, scl.set(sxz, sy, sxz));
       // sim angle grows toward +z; three yaw grows toward -z
-      turretM.makeRotationY(-t.rotation).setPosition(k.turretPos).premultiply(towerM);
+      turretM.makeRotationY(-a.yaw).setPosition(k.turretPos).premultiply(towerM);
       for (const pt of k.parts) pt.mesh.setMatrixAt(i, m4.multiplyMatrices(pt.turret ? turretM : towerM, pt.local));
     }
     for (const k of towerKinds.values()) {
@@ -192,8 +255,9 @@ export function createUnits(scene: THREE.Scene): Units {
       const phase = en.id * 1.7;
       const bob = 0.03 * Math.abs(Math.sin(time * 8 + phase));
       const roll = Math.sin(time * 8 + phase) * 0.087;
-      q.setFromEuler(e.set(roll, -en.heading, 0, 'YXZ'));
-      m4.compose(pos.set(en.x, PATH_Y + bob, en.y), q, scl.set(1, 1, 1));
+      const { x: ex, y: ey, heading } = interp.enemy(en);
+      q.setFromEuler(e.set(roll, -heading, 0, 'YXZ'));
+      m4.compose(pos.set(ex, PATH_Y + bob, ey), q, scl.set(1, 1, 1));
       k.mesh.setMatrixAt(i, m4);
 
       // hit flash: any drop in hp+shield since last frame
@@ -208,14 +272,14 @@ export function createUnits(scene: THREE.Scene): Units {
 
       if (en.hp < en.maxHp || en.shield < en.maxShield) {
         const y = PATH_Y + k.height + 0.18;
-        const x0 = en.x - BAR_W / 2;
+        const x0 = ex - BAR_W / 2;
         const hf = Math.max(0, en.hp / en.maxHp);
         const rows = en.maxShield > 0 ? BAR_H + SHIELD_H + 0.02 : BAR_H;
-        b = pushBar(b, en.x, y + (rows - BAR_H) / 2, en.y, BAR_W + 0.06, rows + 0.05, barBg);
-        b = pushBar(b, x0 + (BAR_W * hf) / 2, y, en.y, BAR_W * hf, BAR_H, barColor(hf));
+        b = pushBar(b, ex, y + (rows - BAR_H) / 2, ey, BAR_W + 0.06, rows + 0.05, barBg);
+        b = pushBar(b, x0 + (BAR_W * hf) / 2, y, ey, BAR_W * hf, BAR_H, barColor(hf));
         if (en.maxShield > 0 && en.shield > 0) {
           const sf = en.shield / en.maxShield;
-          b = pushBar(b, x0 + (BAR_W * sf) / 2, y + BAR_H / 2 + 0.02 + SHIELD_H / 2, en.y, BAR_W * sf, SHIELD_H, shieldCol);
+          b = pushBar(b, x0 + (BAR_W * sf) / 2, y + BAR_H / 2 + 0.02 + SHIELD_H / 2, ey, BAR_W * sf, SHIELD_H, shieldCol);
         }
       }
     }
@@ -233,7 +297,7 @@ export function createUnits(scene: THREE.Scene): Units {
   return {
     sync(state, frameDt) {
       frame++;
-      syncTowers(state.towers);
+      syncTowers(state.towers, frameDt, state.speed);
       syncEnemies(state.enemies, state.time, frameDt);
     },
     towerPosition(id) {

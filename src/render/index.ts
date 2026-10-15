@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { MapDef } from '../data/types';
 import type { GameState } from '../sim/types';
 import { createCameraRig } from './camera';
+import { createInterp, type Interp } from './interp';
 import { createPixelPass } from './pixel';
 import { createTerrain } from './terrain';
 import { createUnits } from './units';
@@ -13,6 +14,8 @@ export interface Renderer {
   readonly camera: THREE.OrthographicCamera;
   /** Per-frame stats (calls include the shadow pass and blit). */
   readonly info: THREE.WebGLInfo;
+  /** Between-step smoothing for enemies/projectiles: main captures before each step and sets alpha. */
+  readonly interp: Interp;
   render(state: GameState, frameDt: number): void;
   pickTile(clientX: number, clientY: number): { col: number; row: number } | null;
   setHover(tile: { col: number; row: number } | null, valid: boolean): void;
@@ -40,6 +43,17 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
   scene.background = new THREE.Color(p.void);
   const rig = createCameraRig(canvas, map.cols, map.rows);
   const camera = rig.camera;
+  // Open on the whole fight: every spawn and the core (extra margin above for portal/core height).
+  const rect = { x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity };
+  const core = { x: map.cols / 2, z: map.rows / 2 };
+  map.tiles.forEach((row, r) =>
+    row.forEach((t, c) => {
+      if (t !== 'spawn' && t !== 'core') return;
+      if (t === 'core') Object.assign(core, { x: c + 0.5, z: r + 0.5 });
+      Object.assign(rect, { x0: Math.min(rect.x0, c - 0.4), z0: Math.min(rect.z0, r - 1), x1: Math.max(rect.x1, c + 1.4), z1: Math.max(rect.z1, r + 1.5) });
+    }),
+  );
+  if (rect.x0 < rect.x1) rig.frame(rect, core);
   const pixel = createPixelPass();
 
   // Lighting: hard key from screen upper-left (shadows fall down-right) + biome hemisphere fill.
@@ -59,7 +73,8 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
 
   const terrain = createTerrain(map);
   scene.add(terrain.group);
-  const units = createUnits(scene);
+  const interp = createInterp();
+  const units = createUnits(scene, interp);
 
   // --- interaction overlays -----------------------------------------------------------------
   const hoverMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.35, depthWrite: false });
@@ -119,6 +134,7 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
     scene,
     camera,
     info: gl.info,
+    interp,
     render(state, frameDt) {
       if (gl.getPixelRatio() !== window.devicePixelRatio) resize();
       clock += frameDt;

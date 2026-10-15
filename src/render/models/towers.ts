@@ -225,6 +225,41 @@ function arcCoil(k: Kit, lv: Lv): void {
   if (lv === 3) tg.push(torus(0.2, 0.012, C.plasma, { p: [0, 0.15, 0], r: [PI / 2, 0, 0] }));
 }
 
+/** Armoured plinth height under each level: the whole tower stands taller per rank. */
+export const TOWER_RISE: Readonly<Record<Lv, number>> = { 1: 0.035, 2: 0.08, 3: 0.13 };
+
+/**
+ * Shared rank dress, readable at normal zoom: plinth (taller per level) with 1/2/3 rank pips on the camera face,
+ * L2+ amber light strips along the plinth, L3 a second strip and two rear beacon masts.
+ */
+function rank(k: Kit, lv: Lv): void {
+  const rise = TOWER_RISE[lv];
+  for (const g of [...k.base, ...k.baseGlow]) g.translate(0, rise, 0);
+  k.pivot += rise;
+  const W = 0.86, f = W / 2;
+  k.base.push(box(W, rise, W, lv === 1 ? C.gunD : C.steelD, { p: [0, rise / 2, 0] }));
+  // pips: dark backing plate + bright chevron pips on the front face
+  k.base.push(box(0.36, Math.min(rise, 0.05), 0.012, C.black, { p: [0, rise / 2, f + 0.004] }));
+  const ph = Math.min(rise - 0.01, 0.035);
+  for (let i = 0; i < lv; i++) k.baseGlow.push(box(0.07, ph, 0.014, 0xffe6a0, { p: [(i - (lv - 1) / 2) * 0.1, rise / 2, f + 0.008] }));
+  if (lv === 1) return;
+  // L2+: strip lights on both sides and the outer front corners; L3 doubles them
+  const ys = lv === 3 ? [rise * 0.3, rise * 0.75] : [rise * 0.55];
+  for (const y of ys) {
+    for (const s of [-1, 1]) {
+      k.baseGlow.push(box(0.012, 0.016, 0.6, C.amber, { p: [s * (f + 0.006), y, 0] }));
+      k.baseGlow.push(box(0.14, 0.016, 0.012, C.amber, { p: [s * (f - 0.08), y, f + 0.006] }));
+    }
+  }
+  for (const s of [-1, 1]) k.base.push(box(0.1, 0.03, 0.1, C.steelL, { p: [s * (f - 0.05), rise + 0.015, f - 0.05] })); // corner caps
+  if (lv === 3) {
+    for (const s of [-1, 1]) {
+      k.base.push(box(0.05, 0.42, 0.05, C.gun, { p: [s * (f - 0.03), rise + 0.21, -(f - 0.03)] }));
+      k.baseGlow.push(box(0.06, 0.05, 0.06, C.amber, { p: [s * (f - 0.03), rise + 0.445, -(f - 0.03)] }));
+    }
+  }
+}
+
 const BUILD: Record<TowerId, (k: Kit, lv: Lv) => void> = {
   picket, thumper, stasis, longshot, breacher, arc_coil: arcCoil,
 };
@@ -239,6 +274,7 @@ export function towerGeometries(defId: TowerId, level: Lv): Built {
   if (!b) {
     const k: Kit = { base: [], baseGlow: [], tur: [], turGlow: [], pivot: 0 };
     BUILD[defId](k, level);
+    rank(k, level);
     b = { base: merge(k.base), baseGlow: opt(k.baseGlow), tur: merge(k.tur), turGlow: opt(k.turGlow), pivot: k.pivot };
     cache.set(key, b);
   }

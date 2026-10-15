@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600;700&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@600;700&family=Share+Tech+Mono&family=Silkscreen:wght@400;700&display=swap');
 
 :root {
   --metal-900: #12151a;
@@ -22,6 +22,7 @@
   --font-mono: 'Share Tech Mono', ui-monospace, monospace;
   --font-ui: 'Rajdhani', system-ui, sans-serif;
   --font-title: 'Orbitron', 'Rajdhani', sans-serif;
+  --font-pixel: 'Silkscreen', 'Share Tech Mono', monospace;
 }
 
 /* ---------- shared building blocks ---------- */
@@ -1004,16 +1005,74 @@
 .float {
   position: absolute;
   opacity: 0;
-  font: 15px/1 var(--font-mono);
+  font: 700 22px/1 var(--font-pixel);
   white-space: nowrap;
-  text-shadow: 1px 1px 0 #000, 0 0 4px #000;
+  /* hard 2px pixel outline + soft glow */
+  text-shadow:
+    2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000,
+    2px 2px 0 #000, -2px 2px 0 #000, 2px -2px 0 #000, -2px -2px 0 #000,
+    0 0 10px rgba(0, 0, 0, 0.8);
   will-change: transform, opacity;
 }
 .float-cash {
-  color: var(--amber);
+  color: #ffd040;
 }
 .float-damage {
-  color: #ff6a5a;
+  font-size: 14px;
+  color: #ff8a7a;
+}
+.hud-vignette {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  box-shadow: inset 0 0 120px 30px rgba(255, 30, 20, 0.75);
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 20, 10, 0.28));
+}
+.hud-boss {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(520px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 7px 12px 8px;
+}
+.boss-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 5px;
+}
+.boss-name {
+  font: 900 13px/1 var(--font-title);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--danger);
+  text-shadow: 0 0 8px rgba(255, 74, 58, 0.6);
+}
+.boss-nums {
+  font: 13px/1 var(--font-mono);
+  color: var(--text);
+}
+.boss-track {
+  height: 10px;
+  background: #080808;
+  border: 1px solid var(--metal-600);
+}
+.boss-track-shield {
+  height: 5px;
+  margin-top: 3px;
+}
+.boss-fill {
+  height: 100%;
+  transition: width 0.15s linear;
+}
+.boss-hp {
+  background: linear-gradient(#ff6a4a, #c01e10);
+}
+.boss-shield {
+  background: linear-gradient(#8ad0ff, #3a7cff);
 }
 .float-info {
   color: var(--teal);
@@ -1148,7 +1207,8 @@
   .cmd-key, .cmd-cost { font-size: 14px; }
   .sm-hud kbd { font-size: 13px; }
   .hud-flash { font-size: 26px; }
-  .float { font-size: 18px; }
+  .float { font-size: 26px; }
+  .float-damage { font-size: 16px; }
   .portrait-cap { font-size: 12px; }
 }
 

@@ -11,6 +11,8 @@ const container = document.getElementById('canvas-container')!;
 const ui = document.getElementById('ui')!;
 // App lifetime: its gesture-unlock listeners and mute state outlive individual games.
 const sfx = createSfx();
+/** Damage-number floats are noisy; opt in with ?dmg in the URL. */
+const DAMAGE_FLOATS = new URLSearchParams(location.search).has('dmg');
 
 function home(): void {
   const screen = createHomeScreen(ui, (cfg) => {
@@ -22,7 +24,7 @@ function home(): void {
 function play(cfg: SimConfig): void {
   const game = createGame(cfg);
   const renderer = createRenderer(container, MAPS[cfg.mapId]);
-  const fx = createFx(renderer.scene);
+  const fx = createFx(renderer.scene, renderer.interp);
   const canvas = container.querySelector('canvas')!;
   let build: TowerId | null = null;
   let selected: number | null = null;
@@ -124,6 +126,15 @@ function play(cfg: SimConfig): void {
           hud.floatText(p.x, p.y, `+${ev.bounty}`, 'cash');
           break;
         }
+        case 'hit': {
+          if (!DAMAGE_FLOATS || ev.damage < 1) break;
+          const p = renderer.worldToScreen(ev.x, ev.y, 0.5);
+          hud.floatText(p.x, p.y, String(Math.round(ev.damage)), 'damage');
+          break;
+        }
+        case 'leak':
+          hud.leak();
+          break;
         case 'waveStart': {
           const n = ev.index + 1;
           const bonus = ev.earlyBonus > 0 ? ` · early bonus +${ev.earlyBonus}` : '';
@@ -147,9 +158,11 @@ function play(cfg: SimConfig): void {
     last = now;
     acc += dt * game.state.speed;
     while (acc >= FIXED_DT) {
+      renderer.interp.capture(game.state);
       game.step();
       acc -= FIXED_DT;
     }
+    renderer.interp.alpha = acc / FIXED_DT;
     const events = game.drainEvents();
     if (events.length) {
       fx.handle(events, game.state);

@@ -25,6 +25,8 @@ export interface Hud {
   selectBuild(defId: TowerId | null): void;
   floatText(screenX: number, screenY: number, text: string, kind: 'cash' | 'damage' | 'info'): void;
   flash(message: string): void;
+  /** Red screen-edge pulse (an enemy reached the core). */
+  leak(): void;
   destroy(): void;
 }
 
@@ -36,7 +38,7 @@ const DMG_LABEL: Readonly<Record<DamageType, string>> = {
   plasma: 'Plasma',
 };
 const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
-const FLOAT_POOL = 24;
+const FLOAT_POOL = 40;
 
 function dmgText(l: TowerLevel): string {
   let s = String(l.damage);
@@ -254,8 +256,23 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   const floats = Array.from({ length: FLOAT_POOL }, () => floatLayer.appendChild(h('span', 'float')));
   let floatNext = 0;
   const overlay = h('div', 'hud-overlay', { hidden: true });
+  const vignette = h('div', 'hud-vignette', { 'aria-hidden': 'true' });
 
-  const hud = h('div', 'sm-hud', {}, top, floatLayer, flashEl, consoleEl, overlay);
+  // ---------- boss bar (top centre while a boss is alive)
+  const bossName = h('span', 'boss-name');
+  const bossNums = h('span', 'boss-nums');
+  const bossHp = h('div', 'boss-fill boss-hp');
+  const bossShield = h('div', 'boss-fill boss-shield');
+  const bossBar = h(
+    'div',
+    'panel hud-boss',
+    { hidden: true, role: 'status' },
+    h('div', 'boss-head', {}, bossName, bossNums),
+    h('div', 'boss-track', {}, bossHp),
+    h('div', 'boss-track boss-track-shield', {}, bossShield),
+  );
+
+  const hud = h('div', 'sm-hud', {}, vignette, top, bossBar, floatLayer, flashEl, consoleEl, overlay);
   root.append(hud);
 
   // ---------- actions
@@ -521,6 +538,18 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     }
   }
 
+  function renderBoss(s: GameState): void {
+    const b = s.enemies.find((e) => ENEMIES[e.defId].isBoss);
+    if (bossBar.hidden !== !b) bossBar.hidden = !b;
+    if (!b) return;
+    setText(bossName, `${ENEMIES[b.defId].name}${b.midBoss ? ' · vanguard' : ''}`);
+    setText(bossNums, b.maxShield > 0 ? `${fmtInt(b.hp)} HP · ${fmtInt(b.shield)} SH` : `${fmtInt(b.hp)} HP`);
+    bossHp.style.width = `${(100 * Math.max(0, b.hp)) / b.maxHp}%`;
+    const track = bossShield.parentElement!;
+    if (track.hidden !== !(b.maxShield > 0)) track.hidden = !(b.maxShield > 0);
+    if (b.maxShield > 0) bossShield.style.width = `${(100 * Math.max(0, b.shield)) / b.maxShield}%`;
+  }
+
   function renderOverlay(s: GameState): void {
     if (s.status === lastStatus) return;
     lastStatus = s.status;
@@ -604,14 +633,22 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     el.style.left = `${screenX}px`;
     el.style.top = `${screenY}px`;
     el.getAnimations().forEach((a) => a.cancel());
+    // pop in, hang, drift up and fade
     el.animate(
       [
-        { opacity: 1, transform: 'translate(-50%, 0)' },
-        { opacity: 1, transform: 'translate(-50%, -14px)', offset: 0.5 },
-        { opacity: 0, transform: 'translate(-50%, -28px)' },
+        { opacity: 0, transform: 'translate(-50%, 0) scale(0.5)' },
+        { opacity: 1, transform: 'translate(-50%, -8px) scale(1.3)', offset: 0.12 },
+        { opacity: 1, transform: 'translate(-50%, -14px) scale(1)', offset: 0.3 },
+        { opacity: 1, transform: 'translate(-50%, -26px) scale(1)', offset: 0.7 },
+        { opacity: 0, transform: 'translate(-50%, -40px) scale(0.95)' },
       ],
-      { duration: 800, easing: 'ease-out', fill: 'forwards' },
+      { duration: kind === 'damage' ? 650 : 1100, easing: 'ease-out', fill: 'forwards' },
     );
+  }
+
+  function leak(): void {
+    vignette.getAnimations().forEach((a) => a.cancel());
+    vignette.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 0 }], { duration: 700, easing: 'ease-out' });
   }
 
   return {
@@ -624,6 +661,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       renderWave(s);
       renderCards(s);
       renderInfo(s);
+      renderBoss(s);
       renderOverlay(s);
     },
     selectTower(id) {
@@ -634,6 +672,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     },
     floatText,
     flash,
+    leak,
     destroy() {
       window.removeEventListener('keydown', onKey);
       hud.remove();

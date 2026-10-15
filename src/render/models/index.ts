@@ -6,5 +6,5 @@
 // createEnemyGeometry(defId): merged, vertex-coloured, cached geometry for an InstancedMesh with
 //   MeshLambertMaterial({ vertexColors: true, flatShading: true }). Faces +X, origin at feet. Glow parts are baked as
 //   over-bright vertex colours (>1). Shared: never dispose per enemy.
-export { createTowerModel } from './towers';
+export { createTowerModel, TOWER_RISE } from './towers';
 export { createEnemyGeometry } from './enemies';
