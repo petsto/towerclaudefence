@@ -13,6 +13,7 @@ const BAR_W = 0.5;
 const BAR_H = 0.07;
 const SHIELD_H = 0.04;
 const FLASH_S = 0.08;
+const FLASH_GAP = 0.16; // dark time before a hit can flash again: sustained fire blinks (~4 Hz) instead of staying white
 const BUILD_S = 0.4;
 const SELL_S = 0.35;
 const UPGRADE_S = 0.35;
@@ -30,6 +31,8 @@ export interface Units {
 /** Per-tower render-side animation state (sim snaps everything). */
 interface TowerAnim {
   yaw: number;
+  /** Last seen cooldown: a rise means the tower fired since the previous frame. */
+  cd: number;
   level: 1 | 2 | 3;
   built: number;
   upgraded: number;
@@ -39,7 +42,7 @@ interface TowerAnim {
   sold: number;
   pos: THREE.Vector3;
 }
-/** Per-enemy: walk phase from distance walked, hit flash from any hp+shield drop. */
+/** Per-enemy: walk phase from distance walked, hit flash from any hp+shield drop (flash < 0 = refractory gap). */
 interface EnemyAnim { x: number; y: number; phase: number; pool: number; flash: number; seen: number }
 
 const easeOutBack = (k: number): number => 1 + 2.7 * (k - 1) ** 3 + 1.7 * (k - 1) ** 2;
@@ -89,14 +92,17 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
       let a = towers.get(t.id);
       if (!a) {
         const p = new THREE.Vector3(t.col + 0.5, topAt(t.col, t.row), t.row + 0.5);
-        towers.set(t.id, (a = { yaw: t.rotation, level: t.level, built: clock, upgraded: -1, seen: frame, last: t, sold: -1, pos: p }));
+        towers.set(t.id, (a = { yaw: t.rotation, cd: t.cooldown, level: t.level, built: clock, upgraded: -1, seen: frame, last: t, sold: -1, pos: p }));
       }
       if (a.level !== t.level) a.upgraded = clock;
       a.level = t.level;
       a.last = t;
       a.seen = frame;
+      // The sim turns and fires in the same step: snap on a shot so the muzzle FX (placed at the sim's rotation)
+      // leave the drawn barrel; ease only while tracking between shots.
       const d = Math.atan2(Math.sin(t.rotation - a.yaw), Math.cos(t.rotation - a.yaw));
-      a.yaw += d * (1 - Math.exp(-dt * state.speed * TURN_RATE));
+      a.yaw = t.cooldown > a.cd ? t.rotation : a.yaw + d * (1 - Math.exp(-dt * state.speed * TURN_RATE));
+      a.cd = t.cooldown;
     }
     for (const [id, a] of towers) {
       if (a.seen !== frame && a.sold < 0) a.sold = clock; // gone from the sim = sold: shrink and fade out
@@ -145,19 +151,19 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
       const y = topAt(Math.floor(x), Math.floor(z));
       const pool = en.hp + en.shield;
       let a = enemies.get(en.id);
-      if (!a) enemies.set(en.id, (a = { x, y: z, phase: en.id * 0.37, pool, flash: 0, seen: frame }));
+      if (!a) enemies.set(en.id, (a = { x, y: z, phase: en.id * 0.37, pool, flash: -FLASH_GAP, seen: frame }));
       let s = stride.get(en.defId);
       if (s === undefined) stride.set(en.defId, (s = THREE.MathUtils.clamp(atlas.bounds(en.defId).r * 2.2, 0.35, 1.4)));
       a.phase += Math.hypot(x - a.x, z - a.y) / s; // one walk cycle per stride of distance
       a.x = x;
       a.y = z;
-      if (pool < a.pool) a.flash = FLASH_S;
+      if (pool < a.pool && a.flash <= -FLASH_GAP) a.flash = FLASH_S;
       a.pool = pool;
-      a.flash = Math.max(0, a.flash - dt);
+      a.flash = Math.max(-FLASH_GAP, a.flash - dt);
       a.seen = frame;
       list.push({
         x, y, z, key: en.defId, frame: enemyFrame(heading, a.phase), order: 2,
-        flash: a.flash / FLASH_S, slow: en.slowed ? 1 : 0, shield: en.shield > 0 ? 0.3 + 0.7 * (en.shield / en.maxShield) : 0,
+        flash: Math.max(0, a.flash) / FLASH_S, slow: en.slowed ? 1 : 0, shield: en.shield > 0 ? 0.3 + 0.7 * (en.shield / en.maxShield) : 0,
       });
 
       if (en.hp < en.maxHp || en.shield < en.maxShield) {
