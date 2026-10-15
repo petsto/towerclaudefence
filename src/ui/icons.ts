@@ -1,5 +1,5 @@
 // Inline SVG glyphs (original, line-art). All draw with currentColor on a 24x24 grid.
-import type { TowerId } from '../data/types';
+import type { PowerId, TowerId } from '../data/types';
 
 const svg = (body: string): string =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
@@ -17,6 +17,13 @@ export const TOWER_ICONS: Readonly<Record<TowerId, string>> = {
   breacher: svg('<rect x="4" y="6" width="16" height="13"/><circle cx="9" cy="10.5" r="2"/><circle cx="15" cy="10.5" r="2"/><circle cx="9" cy="15.5" r="2"/><circle cx="15" cy="15.5" r="2"/>'),
   // capacitor stack with a forked bolt
   arc_coil: svg('<path d="M8 21h8M9 21v-3h6v3"/><path d="M8 15h8M8 12h8M9 9h6"/><path d="M12 9l-2-3 3-1-1-3"/>'),
+};
+
+export const POWER_ICONS: Readonly<Record<PowerId, string>> = {
+  // pronged disc seated in the ground, tremor arcs either side
+  tremor_mines: svg('<path d="M2 19h20"/><path d="M7 19v-2.5h10V19"/><path d="M9 16.5L8 13M12 16.5V12.5M15 16.5l1-3.5"/><path d="M4.5 15c1-1.2 1-2.8 0-4M19.5 15c-1-1.2-1-2.8 0-4" stroke-dasharray="2 1.5"/>'),
+  // column from orbit onto a closing triangular reticle
+  lance_strike: svg('<path d="M9.5 1.5h5L13.2 16h-2.4z" fill="currentColor" fill-opacity=".3"/><ellipse cx="12" cy="16.5" rx="5" ry="2"/><path d="M5 12.5l2.5 1.5M19 12.5L16.5 14M2.5 22l2.5-4M2.5 22h5M21.5 22l-2.5-4M21.5 22h-5"/>'),
 };
 
 export const ICON_CREDITS = svg('<path d="M12 2l8 5v10l-8 5-8-5V7z" fill="currentColor" fill-opacity=".25"/><path d="M12 2v20M4 7l16 10M20 7L4 17" stroke-opacity=".5"/>');

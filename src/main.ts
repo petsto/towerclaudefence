@@ -1,7 +1,7 @@
 // Boot: Home -> Playing -> Home. Wires sim, renderer, FX, audio and HUD, and runs the fixed-step loop.
 import { createSfx } from './audio/sfx';
-import { MAPS, TOWERS } from './data';
-import type { TowerId } from './data/types';
+import { MAPS, POWERS, TOWERS } from './data';
+import type { PowerId, TowerId } from './data/types';
 import { createRenderer } from './render';
 import { createFx } from './render/fx';
 import { createGame, FIXED_DT, type SimConfig, type SimEvent } from './sim';
@@ -27,6 +27,7 @@ function play(cfg: SimConfig): void {
   const fx = createFx(renderer.scene, renderer.interp, MAPS[cfg.mapId]);
   const canvas = container.querySelector('canvas')!;
   let build: TowerId | null = null;
+  let power: PowerId | null = null; // armed command power targeting (GDD §14)
   let selected: number | null = null;
   let pointer: { x: number; y: number } | null = null;
   let raf = 0;
@@ -35,6 +36,7 @@ function play(cfg: SimConfig): void {
     dispatch: (cmd) => game.dispatch(cmd),
     onBuildSelect: (id) => (build = id), // HUD clears its tower selection itself (-> onTowerSelect)
     onTowerSelect: (id) => setSelected(id),
+    onPowerSelect: (id) => (power = id), // HUD clears build mode and tower selection itself
     onExitToMenu: () => {
       stop();
       home();
@@ -64,6 +66,10 @@ function play(cfg: SimConfig): void {
     build = id;
     hud.selectBuild(id);
   }
+  function setPower(id: PowerId | null): void {
+    power = id;
+    hud.selectPower(id);
+  }
 
   const towerAt = (col: number, row: number) => game.state.towers.find((t) => t.col === col && t.row === row);
 
@@ -72,12 +78,21 @@ function play(cfg: SimConfig): void {
   const onLeave = (): void => void (pointer = null);
   const onDown = (e: PointerEvent): void => {
     if (e.button === 2) {
-      if (build !== null) setBuild(null);
+      if (power !== null) setPower(null);
+      else if (build !== null) setBuild(null);
       else selectTower(null);
       return;
     }
     if (e.button !== 0) return;
     const tile = renderer.pickTile(e.clientX, e.clientY);
+    if (power !== null) {
+      if (!tile) return;
+      const r = game.dispatch({ type: 'usePower', power, col: tile.col, row: tile.row });
+      if (!r.ok) hud.flash(r.error);
+      // Shift keeps mine targeting; the HUD drops it once the last charge is spent
+      else if (!(e.shiftKey && POWERS[power].kind === 'mine')) setPower(null);
+      return;
+    }
     const tower = tile && towerAt(tile.col, tile.row);
     if (build !== null && tile && !tower) {
       const r = game.dispatch({ type: 'build', defId: build, col: tile.col, row: tile.row });
@@ -108,6 +123,13 @@ function play(cfg: SimConfig): void {
     const s = game.state;
     const tile = pointer && renderer.pickTile(pointer.x, pointer.y);
     const tower = tile && towerAt(tile.col, tile.row);
+    if (power !== null) {
+      const def = POWERS[power];
+      renderer.setHover(tile, !!tile && game.canUsePower(power, tile.col, tile.row));
+      const rangeTiles = def.kind === 'mine' ? def.fieldRadius : def.radius;
+      renderer.setRangePreview(tile ? { x: tile.col + 0.5, y: tile.row + 0.5, rangeTiles, kind: def.kind } : null);
+      return;
+    }
     if (build !== null) {
       const def = TOWERS[build];
       const valid = !!tile && game.canBuild(tile.col, tile.row) && s.cash >= def.levels[0].cost;
@@ -145,6 +167,9 @@ function play(cfg: SimConfig): void {
           else hud.flash(`Wave ${n} incoming${bonus}`);
           break;
         }
+        case 'powerReady':
+          if (ev.power === 'lance_strike' && ev.charges === 1) hud.flash('Lance strike ready');
+          break;
         case 'waveClear':
           if (game.state.status === 'playing') hud.flash(`Wave ${ev.index + 1} cleared · +${ev.bonus} cr`);
           break;

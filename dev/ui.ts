@@ -30,6 +30,7 @@ function play(cfg: SimConfig): void {
     dispatch: (cmd) => game.dispatch(cmd),
     onBuildSelect: (id) => (build = id),
     onTowerSelect: (id) => console.log('[hud] tower', id),
+    onPowerSelect: (id) => console.log('[hud] power', id),
     onExitToMenu: () => {
       stop();
       home();

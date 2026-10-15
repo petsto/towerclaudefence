@@ -623,7 +623,7 @@
   height: var(--con-h);
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: clamp(230px, 21vw, 300px) calc(var(--con-h) - 46px) minmax(0, 1fr) auto;
+  grid-template-columns: clamp(230px, 21vw, 300px) calc(var(--con-h) - 46px) minmax(0, 1fr) auto auto;
   gap: 10px;
   padding: 18px 14px 12px;
   clip-path: polygon(0 14px, 14px 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%) !important;
@@ -984,6 +984,64 @@
   color: var(--danger);
 }
 
+/* command powers: a 1×2 column joined to the left of the command grid's tray */
+.con-pow {
+  display: flex;
+  align-items: center;
+  margin-right: -10px; /* close the console gap so both grids read as one tray */
+}
+.pow-grid {
+  display: grid;
+  grid-template-columns: var(--cmd);
+  grid-auto-rows: var(--cmd);
+  gap: 6px;
+  padding: 6px 8px 6px 6px;
+  background: #0008;
+  box-shadow:
+    inset 1px 1px 0 var(--bevel-lo),
+    inset -2px 0 0 var(--metal-600); /* divider */
+}
+.pow-sweep {
+  /* clockwise sweep from 12 o'clock: clear over the charged part, dark over the rest */
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: conic-gradient(#0000 0 var(--fill, 0%), #38e0d099 var(--fill, 0%) calc(var(--fill, 0%) + 0.8%), #000000b8 0);
+}
+.pow-ready {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  font: 10px/1 var(--font-mono);
+  letter-spacing: 0;
+  color: var(--readout);
+  text-shadow: 0 0 4px rgba(60, 255, 158, 0.8);
+}
+.pow-count {
+  text-transform: none; /* '87s', not '87S' */
+}
+.sm-hud .pow[data-ready]:not([aria-pressed='true']) {
+  box-shadow:
+    inset 1px 1px 0 var(--bevel-hi),
+    inset -1px -1px 0 var(--bevel-lo),
+    0 0 0 1px var(--readout),
+    0 0 10px rgba(60, 255, 158, 0.45);
+  animation: sm-pow-ready 0.25s steps(1) 4; /* blinks once each time a charge becomes usable */
+}
+.sm-hud .pow[data-ready] .cmd-ico {
+  color: var(--text-hi);
+  filter: drop-shadow(0 0 3px rgba(60, 255, 158, 0.7));
+}
+.sm-hud .pow[aria-disabled='true'] .pow-count {
+  font-size: 9px;
+  color: var(--text-dim);
+}
+@keyframes sm-pow-ready {
+  50% {
+    box-shadow: 0 0 0 2px var(--readout), 0 0 16px var(--readout);
+  }
+}
+
 /* transient */
 .hud-flash {
   position: absolute;
@@ -1212,6 +1270,8 @@
   .tgt-v, .btn-act .cost { font-size: 17px; }
   .act-k { width: 80px; }
   .cmd-key, .cmd-cost { font-size: 14px; }
+  .pow-ready { font-size: 13px; }
+  .sm-hud .pow[aria-disabled='true'] .pow-count { font-size: 11px; }
   .sm-hud kbd { font-size: 13px; }
   .hud-flash { font-size: 26px; }
   .float { font-size: 26px; }
@@ -1234,7 +1294,7 @@
     padding: 0 12px 12px;
   }
   .home-maps { overflow: visible; }
-  .hud-console { grid-template-columns: clamp(200px, 26vw, 260px) minmax(0, 1fr) auto; }
+  .hud-console { grid-template-columns: clamp(200px, 26vw, 260px) minmax(0, 1fr) auto auto; }
   .con-portrait { display: none; }
   .info-actions { width: clamp(140px, 17vw, 180px); }
 }
@@ -1243,14 +1303,17 @@
   .hud-console {
     height: auto;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas: 'wave cmd' 'info info';
+    grid-template-areas: 'wave cmd' 'info pow';
     padding: 16px 10px 10px;
     gap: 8px;
   }
   .con-wave { grid-area: wave; }
   .con-cmd { grid-area: cmd; }
+  .con-pow { grid-area: pow; margin-right: 0; align-items: stretch; width: 0; min-width: 100%; } /* fill the command card's column, never widen it */
+  .sm-hud .pow .cmd-ico { width: 40px; height: 40px; }
+  .pow-grid { flex: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: auto; padding: 6px; box-shadow: inset 1px 1px 0 var(--bevel-lo), inset -1px -1px 0 var(--bevel-hi); }
   .con-info { grid-area: info; height: 118px; box-sizing: border-box; }
-  .info-main, .info-tip { overflow-y: auto; } /* the actions column stays put */
+  .info-idle, .info-main, .info-tip { height: 100%; overflow-y: auto; } /* the actions column stays put */
   .info-actions { width: 118px; }
   .sm-hud .btn-act { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 0 8px; }
   .sm-hud .btn-act kbd,

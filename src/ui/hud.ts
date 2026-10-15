@@ -1,18 +1,22 @@
+import { BOSS_SLOW_FACTOR } from '../data/damage';
 import { DIFFICULTIES } from '../data/difficulty';
 import { WAVE_COUNTDOWN } from '../data/economy';
 import { ENEMIES } from '../data/enemies';
 import { MAPS } from '../data/maps';
+import { POWERS, POWER_LIST } from '../data/powers';
 import { TOWERS, TOWER_LIST } from '../data/towers';
-import type { EnemyId, TargetingMode, TowerDef, TowerId, TowerLevel } from '../data/types';
+import type { EnemyId, PowerDef, PowerId, TargetingMode, TowerDef, TowerId, TowerLevel } from '../data/types';
 import { earlyCallBonus } from '../sim';
-import type { Command, CommandResult, GameState, GameStatus, TowerState } from '../sim/types';
+import type { Command, CommandResult, GameState, GameStatus, PowerState, TowerState } from '../sim/types';
 import { cap, dlRows, fmtInt, h, setAttr, setText } from './dom';
-import { ICON_COMMS, ICON_CREDITS, ICON_LIVES, ICON_MUTED, ICON_PAUSE, ICON_PLAY, ICON_SOUND, TOWER_ICONS } from './icons';
+import { ICON_COMMS, ICON_CREDITS, ICON_LIVES, ICON_MUTED, ICON_PAUSE, ICON_PLAY, ICON_SOUND, POWER_ICONS, TOWER_ICONS } from './icons';
 
 export interface HudOptions {
   dispatch(cmd: Command): CommandResult;
   onBuildSelect(defId: TowerId | null): void;
   onTowerSelect(towerId: number | null): void;
+  /** Command power targeting armed (Q/E or its button) or cleared. Exclusive with build mode. */
+  onPowerSelect(power: PowerId | null): void;
   onExitToMenu(): void;
   /** Returns the new muted state. */
   onToggleMute(): boolean;
@@ -26,6 +30,7 @@ export interface Hud {
   update(state: GameState): void;
   selectTower(towerId: number | null): void;
   selectBuild(defId: TowerId | null): void;
+  selectPower(power: PowerId | null): void;
   floatText(screenX: number, screenY: number, text: string, kind: 'cash' | 'damage'): void;
   flash(message: string): void;
   /** Red screen-edge pulse (an enemy reached the core). */
@@ -91,16 +96,29 @@ function icon(svg: string, cls = 'ico'): HTMLSpanElement {
 /** The sim leaves the countdown at exactly WAVE_COUNTDOWN while it holds for the field to clear. */
 const held = (s: GameState): boolean => s.nextWaveIn === WAVE_COUNTDOWN && s.enemies.length > 0;
 
-function row(label: string): [HTMLElement, HTMLElement] {
+function row(label: string): [HTMLElement, HTMLElement, HTMLElement] {
+  const k = h('dt', '', {}, label);
   const v = h('dd');
-  return [h('div', 'stat', {}, h('dt', '', {}, label), v), v];
+  return [h('div', 'stat', {}, k, v), v, k];
 }
+
+/** Info / tooltip on hover and focus; leave clears only if focus has gone too. */
+function hoverable(b: HTMLButtonElement, set: (on: boolean) => void): void {
+  b.addEventListener('pointerenter', () => set(true));
+  b.addEventListener('pointerleave', () => set(false));
+  b.addEventListener('focus', () => set(true));
+  b.addEventListener('blur', () => b.matches(':hover') || set(false));
+}
+
+const secsLeft = (def: PowerDef, p: PowerState): number => Math.ceil(def.chargeTime - p.charge);
 
 export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   let state: GameState | null = null;
   let selTower: number | null = null;
   let selBuild: TowerId | null = null;
   let hoverBuild: TowerId | null = null;
+  let selPower: PowerId | null = null;
+  let hoverPower: PowerId | null = null;
   let shownCash = -1;
   let lastFrame = performance.now();
   let lastStatus: GameStatus | null = null;
@@ -164,7 +182,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     {},
     h('div', 'info-name', {}, 'No structure selected'),
     h('p', '', {}, 'Choose a structure from the command card [1–6], then deploy it on a build pad.'),
-    h('p', 'dim', {}, 'Click a structure to inspect it. ESC cancels. P pauses.'),
+    h('p', 'dim', {}, 'Q mines · E Lance strike. Click a structure to inspect it. ESC cancels. P pauses.'),
   );
 
   const tName = h('div', 'info-name');
@@ -204,9 +222,9 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   const tipType = h('span', 'dtype');
   const tipKey = h('kbd');
   const tipDesc = h('p', 'tip-desc');
-  const [tdRow, tdV] = row('DMG');
-  const [trRow, trV] = row('RATE');
-  const [tgRow, tgV] = row('RANGE');
+  const [tdRow, tdV, tdK] = row('DMG');
+  const [trRow, trV, trK] = row('RATE');
+  const [tgRow, tgV, tgK] = row('RANGE');
   const tipSpecial = h('div', 'info-special');
   const tipHint = h('div', 'tip-hint');
   const tipView = h(
@@ -234,20 +252,42 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       h('span', 'cmd-cost', {}, String(def.levels[0].cost)),
     );
     b.addEventListener('click', () => clickBuild(def));
-    const enter = (): void => void (hoverBuild = def.id);
-    const leave = (): void => {
-      if (hoverBuild === def.id) hoverBuild = null;
-    };
-    b.addEventListener('pointerenter', enter);
-    b.addEventListener('pointerleave', leave);
-    b.addEventListener('focus', enter);
-    b.addEventListener('blur', () => b.matches(':hover') || leave());
+    hoverable(b, (on) => {
+      if (on) hoverBuild = def.id;
+      else if (hoverBuild === def.id) hoverBuild = null;
+    });
     cards.set(def.id, { b, def });
     cardGrid.append(b);
   }
   const cmdCard = h('section', 'con-cmd', { 'aria-label': 'Command card' }, cardGrid);
 
-  const consoleEl = h('div', 'panel hud-console', {}, wavePanel, portrait, info, cmdCard);
+  // ---------- console: command powers (GDD §14), a 1×2 column in the command tray
+  const powBtns = new Map<PowerId, { b: HTMLButtonElement; def: PowerDef; readyEl: HTMLElement; countEl: HTMLElement }>();
+  const powGrid = h('div', 'pow-grid', { role: 'toolbar', 'aria-label': 'Command powers' });
+  for (const def of POWER_LIST) {
+    const readyEl = h('span', 'pow-ready');
+    const countEl = h('span', 'cmd-cost pow-count');
+    const key = def.hotkey.toUpperCase();
+    const b = btn(
+      'cmd pow',
+      `${def.name} (${key})`,
+      h('span', 'pow-sweep'),
+      h('span', 'cmd-key', {}, key),
+      icon(POWER_ICONS[def.id], 'cmd-ico'),
+      readyEl,
+      countEl,
+    );
+    b.addEventListener('click', () => clickPower(def));
+    hoverable(b, (on) => {
+      if (on) hoverPower = def.id;
+      else if (hoverPower === def.id) hoverPower = null;
+    });
+    powBtns.set(def.id, { b, def, readyEl, countEl });
+    powGrid.append(b);
+  }
+  const powCard = h('section', 'con-pow', { 'aria-label': 'Command powers' }, powGrid);
+
+  const consoleEl = h('div', 'panel hud-console', {}, wavePanel, portrait, info, powCard, cmdCard);
 
   // ---------- transient layers
   const flashEl = h('div', 'hud-flash', { role: 'status', 'aria-live': 'assertive' });
@@ -286,7 +326,26 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     if (selBuild === id) return;
     selBuild = id;
     opts.onBuildSelect(id);
+    if (id !== null) setPower(null);
     if (id !== null && selTower !== null) setTower(null);
+  }
+
+  function setPower(id: PowerId | null): void {
+    if (selPower === id) return;
+    selPower = id;
+    opts.onPowerSelect(id);
+    if (id === null) return;
+    setBuild(null);
+    setTower(null);
+  }
+
+  function clickPower(def: PowerDef): void {
+    if (selPower === def.id) return setPower(null);
+    if (!state) return;
+    const p = state.powers[def.id];
+    if (state.waveIndex < 0) return flash('Charging begins with the assault');
+    if (p.charges < 1) return flash(`${def.name} charging · ${secsLeft(def, p)}s`);
+    setPower(def.id);
   }
 
   function setTower(id: number | null): void {
@@ -367,9 +426,12 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     // e.code too, so digit hotkeys work on AZERTY and similar layouts
     const def = TOWER_LIST.find((d) => d.hotkey === key || e.code === `Digit${d.hotkey}`);
     if (def) return clickBuild(def);
+    const pow = POWER_LIST.find((d) => d.hotkey === key);
+    if (pow) return clickPower(pow);
     switch (key) {
       case 'escape':
         if (state.status === 'paused') togglePause();
+        else if (selPower !== null) setPower(null);
         else if (selBuild !== null) setBuild(null);
         else if (selTower !== null) setTower(null);
         else togglePause();
@@ -475,8 +537,70 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     }
   }
 
+  function renderPowers(s: GameState): void {
+    const standby = s.waveIndex < 0; // charging starts when wave 1 launches
+    for (const { b, def, readyEl, countEl } of powBtns.values()) {
+      const p = s.powers[def.id];
+      const ready = p.charges > 0;
+      if (selPower === def.id && !ready) setPower(null); // last charge spent (e.g. Shift-planting mines)
+      const fill = `${p.charges >= def.maxCharges ? 100 : ((100 * p.charge) / def.chargeTime).toFixed(1)}%`;
+      if (b.style.getPropertyValue('--fill') !== fill) b.style.setProperty('--fill', fill);
+      setAttr(b, 'aria-disabled', standby ? 'true' : null);
+      setAttr(b, 'aria-pressed', String(selPower === def.id));
+      setAttr(b, 'data-ready', ready ? '' : null);
+      setText(readyEl, ready ? 'READY' : '');
+      let count = '';
+      if (standby) count = 'STANDBY';
+      else if (def.maxCharges > 1) count = `${p.charges}/${def.maxCharges}`;
+      else if (!ready) count = `${secsLeft(def, p)}s`;
+      setText(countEl, count);
+    }
+  }
+
+  function renderPowerTip(def: PowerDef, armed: boolean, s: GameState): void {
+    const p = s.powers[def.id];
+    const standby = s.waveIndex < 0;
+    setText(tipName, def.name);
+    let status = `${secsLeft(def, p)}s`;
+    if (standby) status = 'STANDBY';
+    else if (p.charges > 0) status = def.maxCharges > 1 ? `READY ${p.charges}/${def.maxCharges}` : 'READY';
+    setText(tipCost, status);
+    tipCost.classList.remove('poor');
+    setText(tipKey, def.hotkey.toUpperCase());
+    setText(tipDesc, def.description);
+    setText(tdK, 'CHARGE');
+    setText(tdV, `${def.chargeTime}s`);
+    if (def.kind === 'mine') {
+      setText(tipType, 'Seismic');
+      tipType.dataset.type = 'concussive';
+      setText(trK, 'SLOW');
+      setText(trV, `${Math.round(def.slow * 100)}%/${def.fieldDuration}s`);
+      setText(tgK, 'FIELD');
+      setText(tgV, String(def.fieldRadius));
+      setText(tipSpecial, `Stores ${def.maxCharges} · lane tiles only · bosses slowed ${Math.round(def.slow * BOSS_SLOW_FACTOR * 100)}%`);
+    } else {
+      // pulse damage scales with the map's HP growth, like the enemies it hits
+      const dmg = Math.round(def.pulseDamage * MAPS[s.mapId].hpGrowth ** Math.max(0, s.waveIndex));
+      setText(tipType, cap(def.damageType));
+      tipType.dataset.type = def.damageType;
+      setText(trK, 'DMG');
+      setText(trV, `${dmg} ×${def.pulses}`);
+      setText(tgK, 'RADIUS');
+      setText(tgV, String(def.radius));
+      setText(tipSpecial, `Ignores armor · ${def.telegraph}s warning · bosses lose ${Math.round(def.bossFraction * 100)}%`);
+    }
+    let hint = '';
+    if (standby) hint = 'Charging begins with the assault';
+    else if (armed && def.kind === 'mine') hint = 'TARGETING · click a lane tile · SHIFT plants more · ESC / right-click cancels';
+    else if (armed) hint = 'TARGETING · click any tile · ESC / right-click cancels';
+    setText(tipHint, hint);
+  }
+
   function renderTip(def: TowerDef, building: boolean, cash: number): void {
     const l = def.levels[0];
+    setText(tdK, 'DMG');
+    setText(trK, 'RATE');
+    setText(tgK, 'RANGE');
     setText(tipName, def.name);
     setText(tipCost, `${l.cost} cr`);
     tipCost.classList.toggle('poor', cash < l.cost);
@@ -516,21 +640,23 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   function renderInfo(s: GameState): void {
     const t = selected();
     if (selTower !== null && !t) setTower(null); // sold or gone
-    const tipDef = hoverBuild ? TOWERS[hoverBuild] : !t && selBuild ? TOWERS[selBuild] : null;
-    const mode = tipDef ? 'tip' : t ? 'tower' : 'idle';
+    const tipDef = hoverBuild ? TOWERS[hoverBuild] : !hoverPower && !t && selBuild ? TOWERS[selBuild] : null;
+    const powId = tipDef ? null : (hoverPower ?? selPower);
+    const powDef = powId ? POWERS[powId] : null;
+    const mode = tipDef || powDef ? 'tip' : t ? 'tower' : 'idle';
     if (idleView.hidden !== (mode !== 'idle')) idleView.hidden = mode !== 'idle';
     if (towerView.hidden !== (mode !== 'tower')) towerView.hidden = mode !== 'tower';
     if (tipView.hidden !== (mode !== 'tip')) tipView.hidden = mode !== 'tip';
     if (tipDef) renderTip(tipDef, !hoverBuild || hoverBuild === selBuild, s.cash);
+    else if (powDef) renderPowerTip(powDef, powDef.id === selPower, s);
     else if (t) renderTower(t, s.cash);
 
-    const pDef = tipDef ?? (t ? TOWERS[t.defId] : null);
-    const pk = pDef ? `${pDef.id}:${t?.level ?? 0}` : 'idle';
+    const pk = tipDef ? `${tipDef.id}:0` : powDef ? powDef.id : t ? `${t.defId}:${t.level}` : 'idle';
     if (pk !== portraitKey) {
       portraitKey = pk;
-      portraitGlyph.innerHTML = pDef ? TOWER_ICONS[pDef.id] : ICON_COMMS;
-      portrait.classList.toggle('idle', !pDef);
-      portraitCap.textContent = pDef ? (t && !tipDef ? `MK ${'I'.repeat(t.level)}` : 'SCHEMATIC') : 'COMMS';
+      portraitGlyph.innerHTML = tipDef ? TOWER_ICONS[tipDef.id] : powDef ? POWER_ICONS[powDef.id] : t ? TOWER_ICONS[t.defId] : ICON_COMMS;
+      portrait.classList.toggle('idle', pk === 'idle');
+      portraitCap.textContent = tipDef ? 'SCHEMATIC' : powDef ? 'ORBITAL' : t ? `MK ${'I'.repeat(t.level)}` : 'COMMS';
     }
   }
 
@@ -658,6 +784,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       renderTop(s, dt);
       renderWave(s);
       renderCards(s);
+      renderPowers(s);
       renderInfo(s);
       renderBoss(s);
       renderOverlay(s);
@@ -667,6 +794,9 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     },
     selectBuild(id) {
       selBuild = id;
+    },
+    selectPower(id) {
+      selPower = id;
     },
     floatText,
     flash,

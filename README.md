@@ -23,7 +23,9 @@ Node 24+.
 | `1`–`6` | Pick a structure from the command card |
 | Left-click pad | Deploy the picked structure (hold `Shift` to keep placing) |
 | Left-click structure | Select it |
-| Right-click / `Esc` | Cancel build mode / deselect (`Esc` with nothing selected pauses) |
+| `Q` / `E` | Arm Tremor Mines / Lance Strike targeting (command powers; charge from the first wave) |
+| Left-click tile | Use the armed power (mines: lane tiles, hold `Shift` to keep planting) |
+| Right-click / `Esc` | Cancel build mode or power targeting / deselect (`Esc` with nothing selected pauses) |
 | `U` / `X` | Upgrade / sell the selected structure |
 | `Tab` | Cycle the selected structure's targeting |
 | `Space` | Call the next wave (early calls pay a bonus) |
