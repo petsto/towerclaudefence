@@ -2,14 +2,14 @@
 // derived from a height field. All tileable (Repeat wrap), 512². No image assets.
 import * as THREE from 'three';
 
-const S = 512;
+export const S = 512;
 
-function hash(x: number, y: number, s: number): number {
+export function hash(x: number, y: number, s: number): number {
   let h = (x * 374761393 + y * 668265263 + s * 1442695041) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
-const wrap = (a: number, p: number): number => ((a % p) + p) % p;
+export const wrap = (a: number, p: number): number => ((a % p) + p) % p;
 function vnoise(x: number, y: number, p: number, s: number): number {
   const xi = Math.floor(x), yi = Math.floor(y);
   const fx = x - xi, fy = y - yi;
@@ -19,7 +19,7 @@ function vnoise(x: number, y: number, p: number, s: number): number {
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
 /** Tileable fbm; u, v in [0,1), p = base cells per tile. */
-function fbm(u: number, v: number, p: number, s: number, oct = 4): number {
+export function fbm(u: number, v: number, p: number, s: number, oct = 4): number {
   let t = 0, amp = 0.5, f = 1, n = 0;
   for (let i = 0; i < oct; i++) {
     t += vnoise(u * p * f, v * p * f, p * f, s + i * 7) * amp;
@@ -29,21 +29,25 @@ function fbm(u: number, v: number, p: number, s: number, oct = 4): number {
   }
   return t / n;
 }
-const sstep = (a: number, b: number, x: number): number => {
+export const sstep = (a: number, b: number, x: number): number => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
 
-interface Surf { h: Float32Array; r: Float32Array; g: Float32Array; b: Float32Array; rough: Float32Array; metal: Float32Array }
-const surf = (): Surf => ({
+export interface Surf { h: Float32Array; r: Float32Array; g: Float32Array; b: Float32Array; rough: Float32Array; metal: Float32Array }
+export const surf = (): Surf => ({
   h: new Float32Array(S * S), r: new Float32Array(S * S), g: new Float32Array(S * S), b: new Float32Array(S * S),
   rough: new Float32Array(S * S), metal: new Float32Array(S * S),
 });
-const idx = (x: number, y: number): number => wrap(y, S) * S + wrap(x, S);
+export const idx = (x: number, y: number): number => wrap(y, S) * S + wrap(x, S);
 
 export interface TexSet { map: THREE.Texture; orm: THREE.Texture; normal: THREE.Texture }
 
-function toTextures(s: Surf, normalStrength: number): TexSet {
+/** Terrain sets: `heightInR` stores the normalised height in ORM red (height blending), `glow` (0..1) replaces metalness in
+ * ORM blue (canvas alpha is premultiplied, so it can't carry a mask). */
+export function toTextures(s: Surf, normalStrength: number, opt: { glow?: Float32Array; heightInR?: boolean } = {}): TexSet {
+  let h0 = Infinity, h1 = -Infinity;
+  if (opt.heightInR) for (const v of s.h) [h0, h1] = [Math.min(h0, v), Math.max(h1, v)];
   const mk = (fill: (d: Uint8ClampedArray, i: number) => void, srgb: boolean): THREE.Texture => {
     const c = document.createElement('canvas');
     c.width = c.height = S;
@@ -64,9 +68,9 @@ function toTextures(s: Surf, normalStrength: number): TexSet {
     d[i * 4 + 3] = 255;
   }, true);
   const orm = mk((d, i) => {
-    d[i * 4] = 255;
+    d[i * 4] = opt.heightInR ? ((s.h[i]! - h0) / (h1 - h0 || 1)) * 255 : 255;
     d[i * 4 + 1] = s.rough[i]! * 255;
-    d[i * 4 + 2] = s.metal[i]! * 255;
+    d[i * 4 + 2] = (opt.glow ? opt.glow[i]! : s.metal[i]!) * 255;
     d[i * 4 + 3] = 255;
   }, false);
   // Sobel on the wrapped height field. Canvas y runs down, texture v up (flipY), so ny takes +dh/dy.
