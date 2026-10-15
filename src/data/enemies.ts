@@ -18,8 +18,8 @@ export const ENEMIES: Readonly<Record<EnemyId, EnemyDef>> = {
   },
   choir_mother: {
     id: 'choir_mother', name: 'Choir Mother', faction: 'chorus', size: 'heavy', isBoss: true,
-    hp: 5000, armor: 3, shield: 0, speed: 0.5, lives: 20, bounty: 400,
-    ability: { kind: 'birthing', spawn: 'skitterling', count: 2, interval: 8, offset: 0.3 },
+    hp: 3000, armor: 3, shield: 0, speed: 0.5, lives: 20, bounty: 400,
+    ability: { kind: 'birthing', spawn: 'skitterling', count: 2, interval: 10, offset: 0.3 },
   },
   spindle_drone: {
     id: 'spindle_drone', name: 'Spindle Drone', faction: 'remnant', size: 'light', isBoss: false,
@@ -42,7 +42,7 @@ export const ENEMIES: Readonly<Record<EnemyId, EnemyDef>> = {
   },
   foundry_colossus: {
     id: 'foundry_colossus', name: 'Foundry Colossus', faction: 'remnant', size: 'heavy', isBoss: true,
-    hp: 4500, armor: 4, shield: 1500, speed: 0.45, lives: 20, bounty: 400,
+    hp: 2600, armor: 4, shield: 900, speed: 0.45, lives: 20, bounty: 400,
     ability: { kind: 'shieldReboot', delay: 4, perSecond: 60 },
   },
 };

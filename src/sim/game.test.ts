@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import { greedyStrategy } from './autoplay';
-import { MAPS } from '../data';
+import { MAPS, WAVE_COUNTDOWN, WAVE_MAX_HOLD } from '../data';
 import { createGame } from './game';
 import { run, runUntil, setup } from './test-utils';
 
 describe('economy', () => {
   test('starting cash and lives follow difficulty', () => {
     expect([setup('easy'), setup('normal'), setup('hard'), setup('brutal')].map((s) => [s.state.cash, s.state.lives]))
-      .toEqual([[650, 30], [500, 20], [450, 15], [400, 10]]);
+      .toEqual([[780, 30], [600, 20], [600, 15], [600, 10]]);
   });
 
   test('build validates tile, occupancy and cash', () => {
@@ -30,12 +30,12 @@ describe('economy', () => {
     game.dispatch({ type: 'build', defId: 'picket', col: 2, row: 0 });
     expect(state.towers[0]!.sellValue).toBe(100);
     game.dispatch({ type: 'sell', towerId: 1 });
-    expect(state.cash).toBe(400);
+    expect(state.cash).toBe(500);
     game.dispatch({ type: 'callWave' });
     game.step(); // first skitterling spawns
     expect(state.towers[0]!.sellValue).toBe(70);
     expect(game.dispatch({ type: 'sell', towerId: 2 }).ok).toBe(true);
-    expect(state.cash).toBe(470);
+    expect(state.cash).toBe(570);
     expect(game.dispatch({ type: 'sell', towerId: 2 }).ok).toBe(false);
   });
 
@@ -45,7 +45,7 @@ describe('economy', () => {
     game.dispatch({ type: 'callWave' });
     game.step();
     expect(game.dispatch({ type: 'upgrade', towerId: 1 }).ok).toBe(true);
-    expect(state.cash).toBe(325);
+    expect(state.cash).toBe(425);
     expect(state.towers[0]!.sellValue).toBe(175); // undo covers everything invested
     game.dispatch({ type: 'upgrade', towerId: 1 });
     expect(state.towers[0]!.level).toBe(3);
@@ -58,20 +58,22 @@ describe('economy', () => {
     const { game, state } = setup();
     game.dispatch({ type: 'build', defId: 'breacher', col: 1, row: 0 });
     game.dispatch({ type: 'build', defId: 'breacher', col: 2, row: 0 });
+    game.dispatch({ type: 'build', defId: 'breacher', col: 3, row: 0 });
     expect(game.dispatch({ type: 'upgrade', towerId: 1 })).toEqual({ ok: false, error: 'insufficient cash' });
     expect(state.towers[0]!.level).toBe(1);
   });
 
-  test('early-call bonus = 3 x floor(seconds left), capped at 60, scaled by difficulty', () => {
+  test('early-call bonus = 4 x floor(seconds left), capped at 60, scaled by difficulty', () => {
     const { game, state } = setup();
     game.dispatch({ type: 'callWave' });
-    runUntil(game, () => state.nextWaveIn !== null);
-    run(game, 590); // ~10.17 s left
+    runUntil(game, () => state.nextWaveIn !== null && state.nextWaveIn < WAVE_COUNTDOWN); // wave 1 leaked, ticking
+    run(game, 290); // ~10.15 s left
     const cash = state.cash;
     game.dispatch({ type: 'callWave' });
-    expect(game.drainEvents().at(-1)).toEqual({ type: 'waveStart', index: 1, earlyBonus: 30, boss: null });
-    expect(state.cash).toBe(cash + 30);
+    expect(game.drainEvents().at(-1)).toEqual({ type: 'waveStart', index: 1, earlyBonus: 40, boss: null });
+    expect(state.cash).toBe(cash + 40);
 
+    // Calling while the previous wave is still on the field (countdown held at full) pays the max.
     const easy = setup('easy');
     easy.game.dispatch({ type: 'callWave' });
     runUntil(easy.game, () => easy.state.nextWaveIn !== null);
@@ -110,7 +112,7 @@ describe('waves', () => {
       [0, 'skitterling'], [24, 'skitterling'], [48, 'skitterling'], [72, 'skitterling'], [96, 'skitterling'], [120, 'skitterling'],
       [300, 'husk_crawler'], [354, 'husk_crawler'],
     ]);
-    expect(state.nextWaveIn).toBe(20);
+    expect(state.nextWaveIn).toBe(WAVE_COUNTDOWN);
   });
 
   test('HP scales by difficulty and growth^(wave-1); mid boss x0.5 HP with flat bounty', () => {
@@ -118,44 +120,56 @@ describe('waves', () => {
     state.waveIndex = 6; // launch wave 8 (mid boss)
     game.dispatch({ type: 'callWave' });
     runUntil(game, () => state.enemies.length > 0);
-    expect(state.enemies[0]!.maxHp).toBeCloseTo(45 * 1.07 ** 7);
+    expect(state.enemies[0]!.maxHp).toBeCloseTo(45 * 1.06 ** 7);
     runUntil(game, () => state.enemies.some((e) => e.defId === 'choir_mother'));
     const boss = state.enemies.find((e) => e.defId === 'choir_mother')!;
     expect(boss.midBoss).toBe(true);
-    expect(boss.maxHp).toBeCloseTo(5000 * 0.5 * 1.07 ** 7);
+    expect(boss.maxHp).toBeCloseTo(3000 * 0.55 * 1.06 ** 7);
     expect(boss.bounty).toBe(200);
 
     const easy = setup('easy');
     easy.state.waveIndex = 3;
     easy.game.dispatch({ type: 'callWave' });
     easy.game.step();
-    expect(easy.state.enemies[0]!.maxHp).toBeCloseTo(45 * 0.75 * 1.06 ** 4);
+    expect(easy.state.enemies[0]!.maxHp).toBeCloseTo(45 * 0.75 * 1.05 ** 4);
     expect(easy.state.enemies[0]!.bounty).toBe(5); // floor(4 * 1.25)
   });
 
-  test('countdown auto-launches the next wave; callWave rejected while spawning', () => {
+  test('countdown holds until the wave clears, then auto-launches; callWave rejected while spawning', () => {
     const { game, state } = setup();
     expect(state.nextWaveIn).toBeNull();
     game.dispatch({ type: 'callWave' });
     expect(game.dispatch({ type: 'callWave' })).toEqual({ ok: false, error: 'wave still spawning' });
     runUntil(game, () => state.nextWaveIn !== null);
-    game.drainEvents();
-    run(game, 1199);
+    run(game, 600); // skitterlings still walking: held
+    expect(state.nextWaveIn).toBe(WAVE_COUNTDOWN);
+    runUntil(game, () => game.drainEvents().some((e) => e.type === 'waveClear'));
+    run(game, WAVE_COUNTDOWN * 60 - 1);
     expect(state.waveIndex).toBe(0);
     game.step();
     expect(state.waveIndex).toBe(1);
     expect(game.drainEvents()).toContainEqual({ type: 'waveStart', index: 1, earlyBonus: 0, boss: null });
   });
 
-  test('leaks cost lives; wave clears (incl. leaked) pay 20 + 5w', () => {
+  test('countdown holds at most WAVE_MAX_HOLD s for a slow straggler', () => {
+    const { game, state, spawnEnemy } = setup();
+    game.dispatch({ type: 'callWave' });
+    runUntil(game, () => state.nextWaveIn !== null);
+    spawnEnemy('brood_carrier', 0, 0); // wave 1 straggler that takes ~100 s to walk the path
+    runUntil(game, () => state.waveIndex === 1);
+    expect(state.enemies.some((e) => e.defId === 'brood_carrier')).toBe(true);
+    expect(state.time).toBeCloseTo(4 + WAVE_MAX_HOLD + WAVE_COUNTDOWN, 0);
+  });
+
+  test('leaks cost lives; wave clears (incl. leaked) pay 30 + 6w', () => {
     const { game, state } = setup();
     game.dispatch({ type: 'callWave' });
-    runUntil(game, () => state.lives === 10); // wave 2 auto-launched meanwhile, nothing leaked from it yet
+    runUntil(game, () => state.lives === 10); // wave 2 is held until wave 1 clears
     const events = game.drainEvents();
     expect(events.filter((e) => e.type === 'leak')).toHaveLength(10);
     expect(events).toContainEqual({ type: 'leak', enemyId: 1, defId: 'skitterling', lives: 1 });
-    expect(events).toContainEqual({ type: 'waveClear', index: 0, bonus: 25 });
-    expect(state.cash).toBe(525);
+    expect(events).toContainEqual({ type: 'waveClear', index: 0, bonus: 36 });
+    expect(state.cash).toBe(636);
   });
 
   test('lives at 0 means defeat at end of tick', () => {
@@ -179,7 +193,7 @@ describe('waves', () => {
     const events = game.drainEvents();
     expect(state.status).toBe('victory');
     expect(events.slice(-2)).toEqual([
-      { type: 'waveClear', index: 14, bonus: 190 },
+      { type: 'waveClear', index: 14, bonus: 240 },
       { type: 'gameOver', result: 'victory' },
     ]);
     expect(state.nextWaveIn).toBeNull();

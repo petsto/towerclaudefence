@@ -18,6 +18,7 @@ import {
   WAVE_CLEAR_BASE,
   WAVE_CLEAR_PER_WAVE,
   WAVE_COUNTDOWN,
+  WAVE_MAX_HOLD,
 } from '../data';
 import type { DamageType, EnemyDef, EnemyId, TowerDef, TowerLevel } from '../data/types';
 import { FIXED_DT } from './constants';
@@ -120,6 +121,8 @@ export function createSim(config: SimConfig) {
   let nextTowerId = 1;
   let nextProjectileId = 1;
   let spawner: { wave: number; ticks: number; spawned: number[] } | null = null;
+  /** Seconds the current countdown has been held waiting for its wave to clear. */
+  let held = 0;
   const cleared = map.waves.map(() => false);
   const emit = (e: SimEvent) => s.events.push(e);
   const findEnemy = (id: number | null) => (id === null ? undefined : s.enemies.find((e) => e.id === id && !e.dead));
@@ -399,6 +402,7 @@ export function createSim(config: SimConfig) {
       spawner = null;
       s.waveActive = false;
       if (s.waveIndex < s.waveCount - 1) s.nextWaveIn = WAVE_COUNTDOWN;
+      held = 0;
     }
   }
 
@@ -471,7 +475,11 @@ export function createSim(config: SimConfig) {
 
   function step() {
     if (s.status !== 'playing') return;
-    if (s.nextWaveIn !== null) {
+    // Countdown holds while the latest wave still has enemies alive, for at most WAVE_MAX_HOLD s
+    // (no pile-up of auto-launched waves; CALL WAVE still launches early).
+    if (s.nextWaveIn !== null && !cleared[s.waveIndex] && held < WAVE_MAX_HOLD - EPS) {
+      held += dt;
+    } else if (s.nextWaveIn !== null) {
       s.nextWaveIn -= dt;
       if (s.nextWaveIn <= EPS) launchWave(0);
     }

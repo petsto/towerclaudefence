@@ -117,20 +117,21 @@ const cinderForgeWaves: readonly WaveDef[] = [
     g('brood_carrier', 1, 1.8, 0, 1),
     g('spindle_drone', 8, 0.4, 3, 0),
   ] },
-  // W17: base pool 2400 (curve 2500)
+  // W17: base pool 3450 (curve 2500); ramps into the final
   { boss: null, groups: [
     g('skitterling', 20, 0.3, 0, 0),
     g('skitterling', 20, 0.3, 0, 1),
     g('rivet_walker', 2, 0.9, 8.7, 0),
     g('mender_unit', 1, 0.9, 8.7, 1),
+    g('anvil_tread', 1, 1.8, 11.7, 0),
   ] },
-  // W18: base pool 8180 (curve 2625)
+  // W18: base pool 5480 (curve 2625)
   { boss: 'final', groups: [
     g('rivet_walker', 2, 0.9, 0, 0),
     g('skitterling', 12, 0.4, 0, 1),
     g('foundry_colossus', 1, 0, 3.9, 0),
     g('rivet_walker', 2, 0.9, 6.9, 0),
-    g('spindle_drone', 12, 0.4, 7.4, 1),
+    g('spindle_drone', 8, 0.4, 7.4, 1),
     g('mender_unit', 1, 0.9, 10.8, 0),
   ] },
 ];
@@ -144,7 +145,7 @@ export const cinderForge: MapDef = {
     'The geothermal forge is our only fuel source in the sector, and two enemy columns are converging on it from the ash fields. Stop them at the junction or lose the refinery.',
   palette: {
     ground: '#3A3634',
-    groundAlt: '#5C5752',
+    groundAlt: '#5E3A3C', // stays charcoal-red under the 8-level posterize (was olive)
     path: '#7A6F63',
     buildPad: '#4D5A66',
     decor: '#1E1B1A',
@@ -165,6 +166,6 @@ export const cinderForge: MapDef = {
     [[0, 12], [9, 12], [9, 7], [15, 7], [15, 11], [19, 11], [19, 4], [21, 4]],
   ],
   waves: cinderForgeWaves,
-  hpGrowth: 1.085,
-  startingCash: 550,
+  hpGrowth: 1.075,
+  startingCash: 650,
 };

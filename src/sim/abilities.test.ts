@@ -34,14 +34,14 @@ test('brood burst: death spawns children spread back along the path, same wave',
   expect(kids.map((e) => e.defId)).toEqual(['skitterling', 'skitterling', 'skitterling']);
   expect(kids.map((e) => e.progress)).toEqual([10, 9.9, 9.8].map((p) => expect.closeTo(p)));
   expect(kids.every((e) => e.wave === brood.wave)).toBe(true);
-  expect(sim.state.cash).toBe(448);
+  expect(sim.state.cash).toBe(548);
   expect(sim.state.towers[0]!.kills).toBe(1);
 });
 
 test('birthing: boss spawns children behind it every interval', () => {
   const sim = setup();
   still(sim, 'choir_mother', 5);
-  run(sim.game, 479);
+  run(sim.game, 599);
   expect(sim.state.enemies).toHaveLength(1);
   sim.game.step();
   const kids = sim.state.enemies.slice(1);

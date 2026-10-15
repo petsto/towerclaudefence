@@ -1,7 +1,20 @@
 // Headless balance helper: plays a map with a scripted strategy, no render/UI.
-import { MAPS, TOWERS } from '../data';
-import type { MapDef, TowerId } from '../data/types';
+import {
+  ARMOR_FLOOR,
+  CHAIN_FALLOFF,
+  CHAIN_JUMP_RANGE,
+  DIFFICULTIES,
+  ENEMIES,
+  IGNORES_ARMOR,
+  MAPS,
+  MID_BOSS_HP_MULT,
+  SIZE_MULT,
+  TOWER_LIST,
+  TOWERS,
+} from '../data';
+import type { DifficultyDef, EnemyDef, EnemyId, MapDef, TowerDef, TowerId, TowerLevel } from '../data/types';
 import { createGame } from './game';
+import { buildPath } from './path';
 import type { Game, SimConfig } from './types';
 
 /** Called every few steps; dispatches whatever commands it likes. */
@@ -15,13 +28,19 @@ export interface AutoplayResult {
   readonly cash: number;
 }
 
+interface Cell {
+  readonly x: number;
+  readonly y: number;
+  w: number;
+}
+
 const DEFAULT_ORDER: readonly TowerId[] = [
   'picket', 'thumper', 'picket', 'arc_coil', 'longshot', 'stasis', 'breacher', 'thumper', 'arc_coil', 'longshot',
 ];
 
 /** Path tiles weighted by how many paths cross them. */
-function pathCells(map: MapDef): { x: number; y: number; w: number }[] {
-  const cells = new Map<string, { x: number; y: number; w: number }>();
+function pathCells(map: MapDef): Cell[] {
+  const cells = new Map<string, Cell>();
   for (const path of map.paths) {
     const seen = new Set<string>();
     for (let i = 1; i < path.length; i++) {
@@ -43,50 +62,189 @@ function pathCells(map: MapDef): { x: number; y: number; w: number }[] {
   return [...cells.values()];
 }
 
+/** Path tiles (weighted) within a tower level's range ring from tile (col,row). */
+function coverage(cells: readonly Cell[], col: number, row: number, lvl: TowerLevel): number {
+  let score = 0;
+  for (const c of cells) {
+    const d = Math.hypot(c.x - col - 0.5, c.y - row - 0.5);
+    if (d <= lvl.range && d >= lvl.minRange) score += c.w;
+  }
+  return score;
+}
+
+function bestPad(game: Game, map: MapDef, cells: readonly Cell[], lvl: TowerLevel) {
+  let best: { col: number; row: number; score: number } | null = null;
+  for (let row = 0; row < map.rows; row++) {
+    for (let col = 0; col < map.cols; col++) {
+      if (!game.canBuild(col, row)) continue;
+      const score = coverage(cells, col, row, lvl);
+      if (!best || score > best.score) best = { col, row, score };
+    }
+  }
+  return best;
+}
+
 /**
- * Greedy: cycle a build order, placing each tower on the free tile covering the most path.
+ * Naive: cycle a fixed build order, placing each tower on the free tile covering the most path.
  * From 6 towers on, alternate build and upgrade (lowest level first). Calls wave 1 once broke.
  */
 export function greedyStrategy(order: readonly TowerId[] = DEFAULT_ORDER): Strategy {
   let next = 0;
   let upgradeTurn = false;
-  let cells: { x: number; y: number; w: number }[] | null = null;
+  let cells: Cell[] | null = null;
   return (game, map) => {
     const s = game.state;
     cells ??= pathCells(map);
     const def = TOWERS[order[next % order.length]!];
-    const lvl = def.levels[0];
-    let best: { col: number; row: number; score: number } | null = null;
-    for (let row = 0; row < map.rows; row++) {
-      for (let col = 0; col < map.cols; col++) {
-        if (!game.canBuild(col, row)) continue;
-        let score = 0;
-        for (const c of cells) {
-          const d = Math.hypot(c.x - col - 0.5, c.y - row - 0.5);
-          if (d <= lvl.range && d >= lvl.minRange) score += c.w;
-        }
-        if (!best || score > best.score) best = { col, row, score };
-      }
-    }
+    const best = bestPad(game, map, cells, def.levels[0]);
     const up = s.towers.filter((t) => t.level < 3).sort((a, b) => a.level - b.level || a.id - b.id)[0];
     const wantUpgrade = up && (!best || (s.towers.length >= 6 && upgradeTurn));
-    if (wantUpgrade) {
-      if (game.dispatch({ type: 'upgrade', towerId: up.id }).ok) upgradeTurn = false;
-    } else if (best && s.cash >= lvl.cost) {
-      if (game.dispatch({ type: 'build', defId: def.id, col: best.col, row: best.row }).ok) {
-        next++;
-        upgradeTurn = true;
-      }
+    if (wantUpgrade && game.dispatch({ type: 'upgrade', towerId: up.id }).ok) {
+      upgradeTurn = false;
+    } else if (!wantUpgrade && best && game.dispatch({ type: 'build', defId: def.id, col: best.col, row: best.row }).ok) {
+      next++;
+      upgradeTurn = true;
     } else if (s.waveIndex < 0) {
       game.dispatch({ type: 'callWave' });
     }
   };
 }
 
+/** One wave group the competent bot plans against, scaled to the difficulty. */
+interface Threat {
+  readonly def: EnemyDef;
+  readonly hp: number;
+  readonly shield: number;
+  readonly armor: number;
+  readonly speed: number;
+  readonly count: number;
+  readonly interval: number;
+  readonly pathIndex: number;
+  /** HP + shields, plus regen over a full path walk (damage is spread out along it). */
+  readonly ehp: number;
+  /** Lives at stake if the whole group leaks. */
+  readonly stake: number;
+}
+
+function threats(map: MapDef, diff: DifficultyDef, from: number, to: number): Threat[] {
+  const out: Threat[] = [];
+  const lengths = map.paths.map((p) => buildPath(p).length);
+  for (let w = Math.max(0, from); w <= Math.min(to, map.waves.length - 1); w++) {
+    const wave = map.waves[w]!;
+    const growth = (map.hpGrowth + diff.growthAdd) ** w * diff.hpMult;
+    const push = (id: EnemyId, count: number, interval: number, pathIndex: number) => {
+      const def = ENEMIES[id];
+      const scale = growth * (wave.boss === 'mid' && def.isBoss ? MID_BOSS_HP_MULT : 1);
+      const speed = def.speed * diff.speedMult;
+      const regen = def.ability?.kind === 'regen' ? (def.ability.hpPerSecond * lengths[pathIndex]!) / speed : 0;
+      out.push({
+        def, hp: def.hp * scale, shield: def.shield * scale, armor: def.armor + diff.armorAdd,
+        speed, count, interval, pathIndex, ehp: (def.hp + def.shield) * scale + regen, stake: count * def.lives,
+      });
+    };
+    for (const grp of wave.groups) {
+      push(grp.enemyId, grp.count, grp.interval, grp.pathIndex);
+      // ponytail: children approximated as one extra group of Skitterlings at the parent's pace.
+      const a = ENEMIES[grp.enemyId].ability;
+      if (a?.kind === 'broodBurst') push(a.spawn, a.count * grp.count, grp.interval / a.count, grp.pathIndex);
+      if (a?.kind === 'birthing') push(a.spawn, Math.ceil(60 / a.interval) * a.count, a.interval / a.count, grp.pathIndex);
+    }
+  }
+  return out;
+}
+
+// Model ignores target contention and overlap between groups, so it plans for MARGIN x the bare kill.
+const MARGIN = 2;
+/** 'First'-targeting towers spend much of a boss fight on its escorts and spawn. */
+const BOSS_DISTRACTION = 0.4;
+/** Settle for an affordable action worth at least this fraction of the best one (per credit). */
+const SETTLE = 0.8;
+// ponytail: Stasis' slow is valued as this many effective HP/s per point of slow; tune if the bot over/under-builds it.
+const SLOW_VALUE = 40;
+
+/** Rough effective HP/s a tower level deals to a group (armor, size, shields, splash/chain on packed groups). */
+function effDps(def: TowerDef, L: TowerLevel, t: Threat): number {
+  const sm = SIZE_MULT[def.damageType][t.def.size];
+  const hpHit = Math.max(ARMOR_FLOOR, (L.damage - (IGNORES_ARMOR[def.damageType] ? 0 : t.armor)) * sm);
+  const shHit = L.damage * L.shieldMult;
+  const exec = t.def.isBoss || t.shield > 0 ? 1 : 1 - L.executeThreshold;
+  const hits = Math.ceil(t.shield / shHit + (t.hp * exec) / hpHit - 1e-6); // no overkill credit
+  const spacing = t.speed * t.interval;
+  let multi = L.shots * Math.min(L.beamTargets, t.count);
+  // Splash neighbours mostly sit in the 50% outer ring, and shells trail fast targets.
+  if (L.splashRadius > 0 && t.count > 1) multi *= 1 + 0.3 * Math.min(t.count - 1, L.splashRadius / spacing);
+  if (L.chainTargets > 0 && t.count > 1 && spacing <= CHAIN_JUMP_RANGE) {
+    for (let k = 1; k <= Math.min(L.chainTargets, t.count - 1); k++) multi += CHAIN_FALLOFF ** k;
+  }
+  const dps = ((t.hp + t.shield) / hits) * (multi / L.cooldown);
+  const slow = L.slow > 0 && t.def.ability?.kind !== 'slowImmune' ? L.slow * SLOW_VALUE * (t.def.isBoss ? 0.5 : 1) : 0;
+  return dps + slow;
+}
+
+/**
+ * Competent: plans against the next few waves. For each wave group it estimates the kill ratio
+ * r = damage the defense can put into the group while it walks past / group effective HP, and expects
+ * stake x e^(-r/MARGIN) lives to leak from it. Minimising the sum of squared expected leaks rewards fixing
+ * the weakest matchup first (so it mixes tower types) and prepares for bosses well ahead.
+ * Each tick it takes the build (best-coverage pad per type) or upgrade with the most score per credit,
+ * saving up for it if needed. `only` restricts towers (mono-tower checks). Calls wave 1 once broke.
+ */
+export function competentStrategy(only?: readonly TowerId[]): Strategy {
+  const allowed = only ? only.map((id) => TOWERS[id]) : TOWER_LIST;
+  let cells: Cell[][] | null = null;
+  let all: Cell[] | null = null;
+  return (game, map) => {
+    cells ??= map.paths.map((p) => pathCells({ ...map, paths: [p] }));
+    all ??= pathCells(map);
+    const s = game.state;
+    const pool = threats(map, DIFFICULTIES[s.difficultyId], s.waveIndex, s.waveIndex + 3);
+    // Kill ratio contribution of one tower (type, level, tile) to each group: damage over the group's
+    // exposure (time in range per enemy + stream length) / group effective HP.
+    const contrib = (def: TowerDef, L: TowerLevel, col: number, row: number) =>
+      pool.map((t) => {
+        const exposure = coverage(cells![t.pathIndex]!, col, row, L) / t.speed + (t.count - 1) * t.interval;
+        const focus = t.def.isBoss && def.defaultTargeting !== 'strongest' ? BOSS_DISTRACTION : 1;
+        return (focus * effDps(def, L, t) * exposure) / (t.count * t.ehp);
+      });
+    const r = pool.map(() => 0);
+    for (const tw of s.towers) {
+      const def = TOWERS[tw.defId];
+      contrib(def, def.levels[tw.level - 1]!, tw.col, tw.row).forEach((v, i) => (r[i]! += v));
+    }
+    // Expected leak per group = stake x e^(-r/MARGIN); squared so one big leak (a boss) outweighs a few strays.
+    const leak2 = (t: Threat, ri: number) => (t.stake * Math.exp(-ri / MARGIN)) ** 2;
+    const gain = (delta: number[]) => pool.reduce((a, t, i) => a + leak2(t, r[i]!) - leak2(t, r[i]! + delta[i]!), 0);
+
+    const actions: { ratio: number; cost: number; run: () => boolean }[] = [];
+    const consider = (value: number, cost: number, run: () => boolean) => actions.push({ ratio: value / cost, cost, run });
+    for (const def of allowed) {
+      const L = def.levels[0];
+      const pad = bestPad(game, map, all, L);
+      if (!pad || pad.score === 0) continue;
+      consider(gain(contrib(def, L, pad.col, pad.row)), L.cost, () =>
+        game.dispatch({ type: 'build', defId: def.id, col: pad.col, row: pad.row }).ok);
+    }
+    for (const tw of s.towers) {
+      if (tw.level === 3) continue;
+      const def = TOWERS[tw.defId];
+      const now = contrib(def, def.levels[tw.level - 1]!, tw.col, tw.row);
+      const next = contrib(def, def.levels[tw.level]!, tw.col, tw.row);
+      consider(gain(next.map((v, i) => v - now[i]!)), def.levels[tw.level]!.cost, () =>
+        game.dispatch({ type: 'upgrade', towerId: tw.id }).ok);
+    }
+    actions.sort((a, b) => b.ratio - a.ratio);
+    const top = actions[0];
+    // Take the best action, or a nearly-as-good affordable one rather than sitting on cash.
+    const pick = actions.find((a) => a.cost <= s.cash && a.ratio >= top!.ratio * SETTLE);
+    if (pick?.run()) return;
+    if (s.waveIndex < 0) game.dispatch({ type: 'callWave' });
+  };
+}
+
 export function runAutoplay(
   config: SimConfig,
   strategy: Strategy = greedyStrategy(),
-  maxSteps = 60 * 60 * 60,
+  maxSteps = 60 * 60 * 90,
 ): AutoplayResult {
   const game = createGame(config);
   const map = MAPS[config.mapId];

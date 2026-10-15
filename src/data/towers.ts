@@ -16,44 +16,44 @@ const NONE: Omit<TowerLevel, 'cost' | 'damage' | 'cooldown' | 'range'> = {
 
 // Each level spreads the previous one, so the diff reads like the GDD upgrade table.
 const picket1: TowerLevel = { ...NONE, cost: 100, damage: 6, cooldown: 0.4, range: 3.5 };
-const picket2: TowerLevel = { ...picket1, cost: 75, damage: 9 };
-const picket3: TowerLevel = { ...picket2, cost: 125, damage: 12, cooldown: 0.3, range: 4 };
+const picket2: TowerLevel = { ...picket1, cost: 75, damage: 8 };
+const picket3: TowerLevel = { ...picket2, cost: 125, damage: 11, cooldown: 0.35, range: 4 };
 
 const thumper1: TowerLevel = {
   ...NONE,
   cost: 150,
   damage: 20,
-  cooldown: 2,
+  cooldown: 1.7,
   range: 4.5,
   minRange: 1,
   splashRadius: 1.25,
   projectileSpeed: 5,
 };
 const thumper2: TowerLevel = { ...thumper1, cost: 110, damage: 30, splashRadius: 1.5 };
-const thumper3: TowerLevel = { ...thumper2, cost: 190, damage: 44, cooldown: 1.75 };
+const thumper3: TowerLevel = { ...thumper2, cost: 190, damage: 44, cooldown: 1.5 };
 
 const stasis1: TowerLevel = { ...NONE, cost: 120, damage: 4, cooldown: 1, range: 3, slow: 0.35, slowDuration: 2 };
 const stasis2: TowerLevel = { ...stasis1, cost: 90, slow: 0.45, slowDuration: 2.5, range: 3.5 };
 const stasis3: TowerLevel = { ...stasis2, cost: 150, slow: 0.5, damage: 8, beamTargets: 3 };
 
-const longshot1: TowerLevel = { ...NONE, cost: 175, damage: 50, cooldown: 2.5, range: 7, executeThreshold: 0.1 };
-const longshot2: TowerLevel = { ...longshot1, cost: 130, damage: 80, range: 7.5 };
-const longshot3: TowerLevel = { ...longshot2, cost: 220, damage: 120, cooldown: 2.2, executeThreshold: 0.15 };
+const longshot1: TowerLevel = { ...NONE, cost: 225, damage: 40, cooldown: 2.5, range: 5.5, executeThreshold: 0.1 };
+const longshot2: TowerLevel = { ...longshot1, cost: 130, damage: 70, range: 6 };
+const longshot3: TowerLevel = { ...longshot2, cost: 220, damage: 105, cooldown: 2.4, executeThreshold: 0.15 };
 
 const breacher1: TowerLevel = {
   ...NONE,
   cost: 200,
   damage: 35,
   cooldown: 2,
-  range: 4,
+  range: 4.5,
   shots: 2,
   salvoInterval: 0.15,
   projectileSpeed: 7,
 };
 const breacher2: TowerLevel = { ...breacher1, cost: 150, damage: 50 };
-const breacher3: TowerLevel = { ...breacher2, cost: 250, shots: 3, cooldown: 1.8, range: 4.5 };
+const breacher3: TowerLevel = { ...breacher2, cost: 250, shots: 3, cooldown: 1.8, range: 5 };
 
-const arc1: TowerLevel = { ...NONE, cost: 160, damage: 14, cooldown: 1.25, range: 3, chainTargets: 3, shieldMult: 1.5 };
+const arc1: TowerLevel = { ...NONE, cost: 160, damage: 14, cooldown: 1.25, range: 3.5, chainTargets: 3, shieldMult: 1.5 };
 const arc2: TowerLevel = { ...arc1, cost: 120, damage: 20, chainTargets: 4 };
 const arc3: TowerLevel = { ...arc2, cost: 200, damage: 26, cooldown: 1, shieldMult: 2 };
 

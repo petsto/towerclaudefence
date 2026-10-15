@@ -43,19 +43,19 @@ Build only on `B` tiles, one per tile, never blocks the path. Build/upgrade inst
 | Hotkey | Tower | Cost | Dmg | Type | Cooldown | Range | Delivery | Special | Default target |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | Picket Autocannon | 100 | 6 | Normal | 0.40 | 3.5 | Hitscan | — | First |
-| 2 | Thumper Mortar | 150 | 20 | Concussive | 2.00 | 4.5 (min 1.0) | Shell 5 t/s, homing | Splash 1.25; lands at last position if target dies | First |
+| 2 | Thumper Mortar | 150 | 20 | Concussive | 1.70 | 4.5 (min 1.0) | Shell 5 t/s, homing | Splash 1.25; lands at last position if target dies | First |
 | 3 | Stasis Projector | 120 | 4 | Concussive | 1.00 | 3.0 | Beam | Slow 35% / 2.0 s | First, prefers unslowed |
-| 4 | Longshot Railgun | 175 | 50 | Normal | 2.50 | 7.0 | Hitscan | Execute ≤ 10% | Strongest |
-| 5 | Breacher Missile Pod | 200 | 35 ×2 | Explosive | 2.00 | 4.0 | Missiles 7 t/s, salvo 0.15 s | Fizzles if target dies | Strongest |
-| 6 | Arc Coil | 160 | 14 | Plasma | 1.25 | 3.0 | Instant chain | +3 chain targets | First |
+| 4 | Longshot Railgun | 225 | 40 | Normal | 2.50 | 5.5 | Hitscan | Execute ≤ 10% | Strongest |
+| 5 | Breacher Missile Pod | 200 | 35 ×2 | Explosive | 2.00 | 4.5 | Missiles 7 t/s, salvo 0.15 s | Fizzles if target dies | Strongest |
+| 6 | Arc Coil | 160 | 14 | Plasma | 1.25 | 3.5 | Instant chain | +3 chain targets | First |
 
 | Tower | L2 cost: changes | L3 cost: changes | Invested |
 |---|---|---|---|
-| Picket | 75: dmg 9 | 125: dmg 12, cd 0.30, range 4.0 | 300 |
-| Thumper | 110: dmg 30, splash 1.5 | 190: dmg 44, cd 1.75 | 450 |
+| Picket | 75: dmg 8 | 125: dmg 11, cd 0.35, range 4.0 | 300 |
+| Thumper | 110: dmg 30, splash 1.5 | 190: dmg 44, cd 1.50 | 450 |
 | Stasis | 90: slow 45%, 2.5 s, range 3.5 | 150: slow 50%, dmg 8, beam forks to 3 | 360 |
-| Longshot | 130: dmg 80, range 7.5 | 220: dmg 120, cd 2.20, execute 15% | 525 |
-| Breacher | 150: dmg 50 | 250: 3 missiles, cd 1.80, range 4.5 | 600 |
+| Longshot | 130: dmg 70, range 6.0 | 220: dmg 105, cd 2.40, execute 15% | 575 |
+| Breacher | 150: dmg 50 | 250: 3 missiles, cd 1.80, range 5.0 | 600 |
 | Arc Coil | 120: dmg 20, chain +4 | 200: dmg 26, cd 1.00, shield ×2.0 | 480 |
 
 **Targeting** (player-cyclable): First (min distance to core) · Last · Strongest (max hp+shield) · Weakest · Closest (to tower). Re-evaluated whenever a tower is ready; tie-break lowest enemy id. Range: Euclidean, tower tile center → enemy center. Cooldown starts on fire; with no target the tower idles at 0 and fires the tick one enters. Projectiles snapshot damage at fire time and cannot miss a living target.
@@ -67,38 +67,38 @@ Build only on `B` tiles, one per tile, never blocks the path. Build/upgrade inst
 | `skitterling` | Skitterling | Chorus | L | 45 | 0 | — | 2.0 | 1 | 4 | — |
 | `husk_crawler` | Husk Crawler | Chorus | M | 220 | 1 | — | 1.2 | 2 | 16 | Regen 4 HP/s |
 | `brood_carrier` | Brood Carrier | Chorus | H | 750 | 2 | — | 0.7 | 5 | 48 | Death: 3 Skitterlings |
-| `choir_mother` | Choir Mother (boss) | Chorus | H | 5000 | 3 | — | 0.5 | 20 | 400 | Every 8 s: 2 Skitterlings |
+| `choir_mother` | Choir Mother (boss) | Chorus | H | 3000 | 3 | — | 0.5 | 20 | 400 | Every 10 s: 2 Skitterlings |
 | `spindle_drone` | Spindle Drone | Remnant | L | 35 | 1 | 15 | 2.2 | 1 | 8 | — |
 | `rivet_walker` | Rivet Walker | Remnant | M | 160 | 2 | 60 | 1.0 | 2 | 20 | Shields +15/s after 2.5 s undamaged |
 | `mender_unit` | Mender Unit | Remnant | M | 120 | 1 | 40 | 1.3 | 2 | 24 | Heals others in 2 tiles 6 HP/s (no stack) |
 | `anvil_tread` | Anvil Tread | Remnant | H | 900 | 4 | 150 | 0.55 | 5 | 56 | Slow-immune |
-| `foundry_colossus` | Foundry Colossus (boss) | Remnant | H | 4500 | 4 | 1500 | 0.45 | 20 | 400 | Shields +60/s after 4 s undamaged |
+| `foundry_colossus` | Foundry Colossus (boss) | Remnant | H | 2600 | 4 | 900 | 0.45 | 20 | 400 | Shields +60/s after 4 s undamaged |
 
-Spawned children give normal bounty/leak cost and inherit the parent's path progress (offset backwards). Mid-map boss variant: ×0.5 HP and shields, 200 bounty. Visual construction and death FX: `docs/design/enemies.md` §3–4.
+Spawned children give normal bounty/leak cost and inherit the parent's path progress (offset backwards). Mid-map boss variant: ×0.55 HP and shields, 200 bounty. Visual construction and death FX: `docs/design/enemies.md` §3–4.
 
 ## 5. Economy (`src/data/economy.ts`)
 
 | Source | Amount |
 |---|---|
-| Starting cash | Dust Ridge 500 · Cinder Forge 550 · Hollow Spire 600 |
+| Starting cash | Dust Ridge 600 · Cinder Forge 650 · Hollow Spire 700 |
 | Kill bounty | Per enemy (§4). Flat, does not scale with wave. |
-| Wave-clear bonus | `20 + 5 × w` (w = 1-based wave) when every enemy of that wave incl. children is dead or leaked. Boss waves ×2. |
-| Early-call bonus | `3 × floor(countdown seconds left)`, max 60 |
+| Wave-clear bonus | `30 + 6 × w` (w = 1-based wave) when every enemy of that wave incl. children is dead or leaked. Boss waves ×2. |
+| Early-call bonus | `4 × floor(countdown seconds left)`, max 60 |
 | Interest | None |
 
 **Lives:** 20 on Normal; leak cost per enemy (L 1 · M 2 · H 5 · boss 20). Lives ≤ 0 → defeat at end of tick.
-**Wave timeline:** wave 1 launches on CALL WAVE. When wave *w* finishes spawning, a 20 s countdown to *w+1* starts and auto-launches at 0. CALL WAVE during a countdown launches now and pays the early-call bonus. Waves may overlap. **Victory:** final wave fully spawned and no enemies alive.
+**Wave timeline:** wave 1 launches on CALL WAVE. When wave *w* finishes spawning, a 15 s countdown to *w+1* is set. It **holds** (does not tick) while wave *w* still has enemies alive, for at most 40 s (`WAVE_MAX_HOLD`), then ticks and auto-launches at 0. So auto-launched waves overlap only with slow stragglers (a Brood Carrier or boss still walking after 40 s), never pile up. CALL WAVE any time after spawning launches now and pays the early-call bonus; calling while the field is still busy (countdown held at 15) pays the full 60. **Victory:** final wave fully spawned and no enemies alive.
 
 ## 6. Difficulty (`src/data/difficulty.ts`)
 
 | Modifier | Easy (Recruit) | Normal (Veteran) | Hard (Elite) | Brutal |
 |---|---|---|---|---|
-| Enemy HP & shields | ×0.75 | ×1.00 | ×1.25 | ×1.50 |
-| HP growth `g` | −0.010 | +0 | +0.010 | +0.015 |
-| Enemy speed | ×0.90 | ×1.00 | ×1.10 | ×1.15 |
+| Enemy HP & shields | ×0.75 | ×1.00 | ×1.10 | ×1.15 |
+| HP growth `g` | −0.010 | +0 | +0.005 | +0.0075 |
+| Enemy speed | ×0.90 | ×1.00 | ×1.05 | ×1.05 |
 | Enemy armor | +0 | +0 | +0 | +1 |
-| Bounty, clear & early-call bonus | ×1.25 | ×1.00 | ×0.90 | ×0.80 |
-| Starting cash | ×1.30 | ×1.00 | ×0.90 | ×0.80 |
+| Bounty, clear & early-call bonus | ×1.25 | ×1.00 | ×0.95 | ×0.90 |
+| Starting cash | ×1.30 | ×1.00 | ×1.00 | ×1.00 |
 | Lives | 30 | 20 | 15 | 10 |
 
 Cash results round down. Wave content is identical across difficulties.
@@ -108,15 +108,15 @@ Cash results round down. Wave content is identical across difficulties.
 
 | Map | Biome | Tier | Grid | Paths | Build tiles | Waves | `g_map` | Final ×HP | Mid boss | Final boss |
 |---|---|---|---|---|---|---|---|---|---|---|
-| Dust Ridge Outpost | Badlands | 1 | 24×16 | 1 (69 tiles) | 86 | 15 | 1.070 | ×2.6 | W8 Choir Mother | W15 Choir Mother |
-| Cinder Forge | Volcanic | 2 | 22×14 | 2, merge at [9,7] | 45 | 18 | 1.085 | ×4.0 | W9 Choir Mother | W18 Foundry Colossus |
-| Hollow Spire | Crystal / creep | 3 | 20×14 | 2, merge at [11,9] | 22 | 20 | 1.100 | ×6.1 | W10 Foundry Colossus | W20 both |
+| Dust Ridge Outpost | Badlands | 1 | 24×16 | 1 (69 tiles) | 86 | 15 | 1.060 | ×2.3 | W8 Choir Mother | W15 Choir Mother |
+| Cinder Forge | Volcanic | 2 | 22×14 | 2, merge at [9,7] | 45 | 18 | 1.075 | ×3.4 | W9 Choir Mother | W18 Foundry Colossus |
+| Hollow Spire | Crystal / creep | 3 | 20×14 | 2, merge at [11,9] | 22 | 20 | 1.080 | ×4.3 | W10 Foundry Colossus | W20 both |
 
 Tile legend: `.` ground · `#` path · `B` build · `S` spawn · `C` core · `x` decor. Strategy notes per map: `docs/design/maps.md`.
 
 ## 8. Waves
 
-Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in each map file. `delay` = seconds from wave start to the group's first spawn (so groups on different paths run in parallel). Defaults: interval L 0.4 / M 0.9 / H 1.8 s (swarms 0.3); 3 s gap between consecutive groups on a path; boss escorts 3 s after the boss. Base HP pool tracks wave-1 pool × (1 + 0.25(w−1)) before growth; boss waves exceed it by design. One new enemy per wave at most.
+Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in each map file. `delay` = seconds from wave start to the group's first spawn (so groups on different paths run in parallel). Defaults: interval L 0.4 / M 0.9 / H 1.8 s (swarms 0.3); 3 s gap between consecutive groups on a path; boss escorts 3 s after the boss. Base HP pool tracks wave-1 pool × (1 + 0.25(w−1)) before growth; boss waves exceed it by design (mid ×1.6–1.9 of the curve, a skill check; final ×1.6–2.3 of the wave before it). The wave before each final runs ~1.2–1.4× the curve so defenses ramp into the boss instead of hitting a cliff. One new enemy per wave at most.
 
 **Dust Ridge Outpost** (single path; Chorus with light Remnant intro)
 
@@ -129,8 +129,8 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 | 8 | **Mid boss:** Skitterlings → Choir Mother (×0.5) → Spindle escort |
 | 9 | Husks + Spindles |
 | 10 | + Rivet Walker intro |
-| 11–14 | Brood + Husks; 24-swarm + Rivets; wide-spaced Husks (regen test); Broods + follow-up stream |
-| 15 | **Final:** Skitterlings, Husks → Choir Mother → Skitterling escort |
+| 11–14 | Brood + Husks; 24-swarm + Rivets; wide-spaced Husks (regen test); Broods + stream + Husks (ramp) |
+| 15 | **Final:** Skitterlings, Husks → Choir Mother (its own spawn is the escort) |
 
 **Cinder Forge** (path 0 north, 1 south; W1–5 alternate N/S, both from W6; mixed)
 
@@ -143,22 +143,22 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 | 9 | **Mid boss:** Choir Mother (×0.5) N + Skitterlings S |
 | 10–11 | Twin Skitterling streams; Brood N vs Rivet+Mender S |
 | 12 | Anvil Tread intro |
-| 13–17 | Twin Broods; Anvil–Mender–Anvil column; Husk N vs Rivet S; Anvil + Spindle screen; twin 20-swarms |
+| 13–17 | Twin Broods; Anvil–Mender–Anvil column; Husk N vs Rivet S; Anvil + Spindle screen; twin 20-swarms + Anvil (ramp) |
 | 18 | **Final:** Foundry Colossus N with Rivet/Mender escort, Spindle stream S |
 
 **Hollow Spire** (path 0 north, 1 east; both from W1; east gets fast units; full roster)
 
 | Waves | Content |
 |---|---|
-| 1–4 | Skitterlings N, Spindles E; Husk intro W3 |
-| 5–6 | Rivet Walker intro E; Husks N |
+| 1–4 | Skitterlings N, Spindles E; single-Husk intro W3 |
+| 5–6 | Rivet Walker intro E; Husks N vs one Rivet + Spindles E |
 | 7 | Brood Carrier intro N |
 | 8 | 16-swarm N; Rivets E |
 | 9 | Mender Unit intro E |
 | 10 | **Mid boss:** Foundry Colossus (×0.5) N + Spindles E |
 | 11 | Twin Broods N |
 | 12 | Anvil Tread intro with Mender N; Rivets E |
-| 13–19 | Husk/Rivet split; Anvil–Mender–Anvil; Broods + stream; twin Anvils + Spindle screen; twin 24-swarms; Broods vs Rivet+Mender; Anvils + Mender vs Rivets |
+| 13–19 | Husk/Rivet split; Anvil–Mender–Anvil; Broods + stream; twin Anvils + Spindle screen; twin 24-swarms; Broods vs Rivet+Mender; Anvils + Mender vs 6 Rivets (ramp) |
 | 20 | **Final:** Choir Mother N + Foundry Colossus E simultaneously, Husk/Rivet escorts |
 
 ## 9. Game flow
@@ -216,3 +216,29 @@ Towers use number keys so WASD stays free for panning.
 | Tower hotkeys 1–6 (WASD is camera pan) | Lead designer |
 | Sim events accumulate until `drainEvents()` instead of clearing each step (a frame may run 0–3 steps) | Lead designer |
 | Commands apply immediately on `dispatch` (between steps); paused accepts only resume/speed | Lead designer |
+| Countdown holds while the previous wave is alive (max 40 s), 15 s once clear; early call 4 cr/s, max 60 | Balance pass |
+| Bosses 3000 / 2600+900 base, mid ×0.55, Choir births every 10 s; `g_map` 1.06 / 1.075 / 1.08; final escorts trimmed, pre-final waves ramp | Balance pass |
+| Longshot 225 cr, 40 dmg, range 5.5 (was mono-spam optimal on Dust Ridge); Picket L2/L3 trimmed; Thumper faster; Breacher/Arc +0.5 range | Balance pass |
+| Clear bonus 30 + 6w, starting cash +100; Elite/Brutal softened so Recruit→Veteran→Elite→Brutal is a ramp, not a cliff | Balance pass |
+
+## 13. Balance
+
+Headless bots (`src/sim/autoplay.ts`) play every map × difficulty; `npm run balance` prints the full table (`src/sim/balance.report.test.ts`, excluded from `npm test`; ~10 s). Deterministic: same numbers, same table.
+
+- **naive**: fixed build order on the max-coverage pad, alternates build/upgrade from 6 towers.
+- **competent**: looks 3 waves ahead; per wave group estimates kill ratio *r* = damage the defense deals while the group walks past ÷ group effective HP (armor, size, shields, splash/chain, regen, overkill), expects `stake × e^(−r/2)` lives to leak and buys the build/upgrade that most reduces the sum of squared expected leaks per credit. Mixes towers and prepares for bosses without hard-coded rules. `competentStrategy(['picket'])` etc. gives the mono-tower variants.
+
+Results (W = win, L = loss; wave reached / lives left):
+
+| Map | Bot | Recruit | Veteran | Elite | Brutal |
+|---|---|---|---|---|---|
+| Dust Ridge | naive | W 30 | W 19 | L W9 | L W9 |
+| Dust Ridge | competent | W 30 | W 20 | **W 9** | L W9 |
+| Cinder Forge | naive | W 30 | L W18 | L W10 | L W8 |
+| Cinder Forge | competent | W 30 | W 20 | L W18 | L W17 |
+| Hollow Spire | naive | W 30 | L W20 | L W6 | L W4 |
+| Hollow Spire | competent | W 30 | L W20 | L W17 | L W9 |
+
+Mono-tower competent bot, best single tower: Dust Ridge Veteran Longshot W 17 / Breacher W 16 (mixed W 20), Elite all lose (best Longshot L W13; mixed wins); Cinder Forge and Hollow Spire every mono build loses (best L W18 / L W11 on Veteran) where the mixed bot wins or reaches the final wave. Stasis alone never gets past W2.
+
+Read against the targets: Recruit is comfortable everywhere and the naive bot wins it; Veteran wins maps 1–2 and dies to Hollow Spire's twin-boss final; Elite wins Dust Ridge narrowly and loses maps 2–3 on their last waves; Brutal dies mid-to-late (W9/15, W17/18, W9/20). Known gap: on Brutal, Cinder Forge lasts longer than Dust Ridge (Dust's long single path gives the Choir Mother more births at the W8 mid boss).

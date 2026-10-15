@@ -32,9 +32,10 @@ const hollowSpireWaves: readonly WaveDef[] = [
     g('skitterling', 8, 0.4, 0, 0),
     g('spindle_drone', 6, 0.4, 0, 1),
   ] },
-  // W3: base pool 840 (curve 825)
+  // W3: base pool 760 (curve 825)
   { boss: null, groups: [
-    g('husk_crawler', 2, 0.9, 0, 0),
+    g('husk_crawler', 1, 0.9, 0, 0),
+    g('skitterling', 6, 0.4, 3, 0),
     g('spindle_drone', 8, 0.4, 0, 1),
   ] },
   // W4: base pool 1010 (curve 963)
@@ -49,11 +50,11 @@ const hollowSpireWaves: readonly WaveDef[] = [
     g('rivet_walker', 3, 0.9, 0, 1),
     g('spindle_drone', 2, 0.4, 4.8, 1),
   ] },
-  // W6: base pool 1300 (curve 1238)
+  // W6: base pool 1180 (curve 1238)
   { boss: null, groups: [
     g('husk_crawler', 3, 0.9, 0, 0),
-    g('rivet_walker', 2, 0.9, 0, 1),
-    g('spindle_drone', 4, 0.4, 3.9, 1),
+    g('rivet_walker', 1, 0.9, 0, 1),
+    g('spindle_drone', 6, 0.4, 3, 1),
   ] },
   // W7: base pool 1385 (curve 1375)
   { boss: null, groups: [
@@ -129,16 +130,16 @@ const hollowSpireWaves: readonly WaveDef[] = [
     g('mender_unit', 1, 0.9, 4.8, 1),
     g('spindle_drone', 4, 0.4, 7.8, 1),
   ] },
-  // W19: base pool 3140 (curve 3025)
+  // W19: base pool 3580 (curve 3025); ramps into the final
   { boss: null, groups: [
     g('anvil_tread', 2, 1.8, 0, 0),
-    g('rivet_walker', 4, 0.9, 0, 1),
+    g('rivet_walker', 6, 0.9, 0, 1),
     g('mender_unit', 1, 0.9, 4.8, 0),
   ] },
-  // W20: base pool 12830 (curve 3163)
+  // W20: base pool 8130 (curve 3163)
   { boss: 'final', groups: [
     g('skitterling', 10, 0.4, 0, 0),
-    g('spindle_drone', 10, 0.4, 0, 1),
+    g('spindle_drone', 6, 0.4, 0, 1),
     g('choir_mother', 1, 0, 6.6, 0),
     g('foundry_colossus', 1, 0, 6.6, 1),
     g('husk_crawler', 2, 0.9, 9.6, 0),
@@ -176,6 +177,6 @@ export const hollowSpire: MapDef = {
     [[19, 3], [15, 3], [15, 9], [11, 9], [2, 9], [2, 12]],
   ],
   waves: hollowSpireWaves,
-  hpGrowth: 1.1,
-  startingCash: 600,
+  hpGrowth: 1.08,
+  startingCash: 700,
 };

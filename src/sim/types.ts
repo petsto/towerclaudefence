@@ -53,7 +53,7 @@ export interface EnemyState {
   readonly shield: number;
   readonly maxShield: number;
   readonly slowed: boolean;
-  /** Spawned as a mid-boss variant (x0.5 HP, flat bounty). */
+  /** Spawned as a mid-boss variant (MID_BOSS_HP_MULT HP, flat bounty). */
   readonly midBoss: boolean;
 }
 
@@ -116,7 +116,10 @@ export interface GameState {
   readonly waveCount: number;
   /** A launched wave is still spawning. */
   readonly waveActive: boolean;
-  /** Seconds until the next wave auto-launches; null before wave 1, while spawning, or after the last wave. */
+  /**
+   * Seconds until the next wave auto-launches; null before wave 1, while spawning, or after the last wave.
+   * Holds at its start value while the latest wave still has enemies alive (up to WAVE_MAX_HOLD s).
+   */
   readonly nextWaveIn: number | null;
   readonly towers: readonly TowerState[];
   readonly enemies: readonly EnemyState[];

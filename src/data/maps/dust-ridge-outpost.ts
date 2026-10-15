@@ -90,17 +90,17 @@ const dustRidgeWaves: readonly WaveDef[] = [
     g('husk_crawler', 6, 1.5, 0, 0),
     g('skitterling', 10, 0.4, 10.5, 0),
   ] },
-  // W14: base pool 2040 (curve 1913)
+  // W14: base pool 2430 (curve 1913); ramps into the final
   { boss: null, groups: [
     g('brood_carrier', 2, 1.8, 0, 0),
     g('skitterling', 6, 0.4, 4.8, 0),
+    g('husk_crawler', 3, 0.9, 9, 0),
   ] },
-  // W15: base pool 6560 (curve 2025)
+  // W15: base pool 4200 (curve 2025)
   { boss: 'final', groups: [
     g('skitterling', 12, 0.4, 0, 0),
     g('husk_crawler', 3, 0.9, 7.4, 0),
     g('choir_mother', 1, 0, 12.2, 0),
-    g('skitterling', 8, 0.4, 15.2, 0),
   ] },
 ];
 
@@ -133,6 +133,6 @@ export const dustRidgeOutpost: MapDef = {
     [[0, 2], [20, 2], [20, 6], [3, 6], [3, 10], [20, 10], [20, 13], [23, 13]],
   ],
   waves: dustRidgeWaves,
-  hpGrowth: 1.07,
-  startingCash: 500,
+  hpGrowth: 1.06,
+  startingCash: 600,
 };

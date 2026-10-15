@@ -10,9 +10,10 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"**/*.report.test.ts\"",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "balance": "vitest run src/sim/balance.report.test.ts --silent=false"
   },
   "dependencies": {
     "three": "^0.186.1"
