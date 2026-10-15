@@ -25,7 +25,7 @@ Currency: **Credits** (cr). Times in seconds, distances in tiles (1 tile = 1 wor
 1. `d` = tower damage (× splash factor for splash victims, × chain falloff for chain jumps).
 2. **Shields** (if `shield > 0`): `s = d × shieldMult`; `absorbed = min(shield, s)`; `shield -= absorbed`; `d *= 1 − absorbed/s`. Stop if `d == 0`. No armor, no size multiplier on shields.
 3. **HP:** `armorEff = plasma ? 0 : armor`; `hp -= max(0.5, (d − armorEff) × sizeMult)`.
-4. Any damage sets `lastDamagedTick`. `hp ≤ 0` → dies this tick, bounty paid, death abilities fire.
+4. Any damage sets `lastDamagedAt` (sim seconds). `hp ≤ 0` → dies this tick, bounty paid, death abilities fire.
 
 **Shields:** Remnant only. Absorb first, full damage from every type. Regenerate only if the enemy's ability says so. HP is a float; display `ceil(hp)`. Bosses are HEAVY.
 
@@ -38,7 +38,7 @@ Currency: **Credits** (cr). Times in seconds, distances in tiles (1 tile = 1 wor
 
 ## 3. Towers (`src/data/towers.ts`)
 
-Build only on `B` tiles, one per tile, never blocks the path. Build/upgrade instant. **Sell** 70% of invested; **undo** 100% if no enemy spawned since the buy/last upgrade.
+Build only on `B` tiles, one per tile, never blocks the path. Build/upgrade instant. **Sell** 70% of invested; **undo:** credits spent since the last enemy spawn refund at 100% (e.g. a build from wave 1 upgraded before wave 5 sells for 100% of the upgrade + 70% of the build).
 
 | Hotkey | Tower | Cost | Dmg | Type | Cooldown | Range | Delivery | Special | Default target |
 |---|---|---|---|---|---|---|---|---|---|
@@ -126,7 +126,7 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 | 3 | + Husk Crawler intro |
 | 4 | + Spindle Drone intro |
 | 5–7 | Husks; Brood Carrier intro (W6); 16-Skitterling stream |
-| 8 | **Mid boss:** Skitterlings → Choir Mother (×0.5) → Spindle escort |
+| 8 | **Mid boss:** Skitterlings → Choir Mother (×0.55) → Spindle escort |
 | 9 | Husks + Spindles |
 | 10 | + Rivet Walker intro |
 | 11–14 | Brood + Husks; 24-swarm + Rivets; wide-spaced Husks (regen test); Broods + stream + Husks (ramp) |
@@ -140,7 +140,7 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 | 6 | Rivet Walker intro, pairs on both paths |
 | 7 | Brood Carrier intro (N) + Spindles (S) |
 | 8 | Mender Unit intro behind Rivets (N) + Husks (S) |
-| 9 | **Mid boss:** Choir Mother (×0.5) N + Skitterlings S |
+| 9 | **Mid boss:** Choir Mother (×0.55) N + Skitterlings S |
 | 10–11 | Twin Skitterling streams; Brood N vs Rivet+Mender S |
 | 12 | Anvil Tread intro |
 | 13–17 | Twin Broods; Anvil–Mender–Anvil column; Husk N vs Rivet S; Anvil + Spindle screen; twin 20-swarms + Anvil (ramp) |
@@ -155,7 +155,7 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 | 7 | Brood Carrier intro N |
 | 8 | 16-swarm N; Rivets E |
 | 9 | Mender Unit intro E |
-| 10 | **Mid boss:** Foundry Colossus (×0.5) N + Spindles E |
+| 10 | **Mid boss:** Foundry Colossus (×0.55) N + Spindles E |
 | 11 | Twin Broods N |
 | 12 | Anvil Tread intro with Mender N; Rivets E |
 | 13–19 | Husk/Rivet split; Anvil–Mender–Anvil; Broods + stream; twin Anvils + Spindle screen; twin 24-swarms; Broods vs Rivet+Mender; Anvils + Mender vs 6 Rivets (ramp) |
@@ -163,12 +163,7 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 
 ## 9. Game flow
 
-```
-Home --(pick map + difficulty)--> Playing <--(pause/resume)--> Paused
-                                     |-- final wave cleared --> Victory --> Home
-                                     |-- lives reach 0 -------> Defeat  --> Home
-Paused --(quit)--> Home
-```
+State machine: `docs/architecture.md`.
 
 - **Home:** map cards (thumbnail from map data, name, biome, wave count) and a 4-way difficulty switch.
 - **Playing:** sim runs; before wave 1 the player builds freely and presses CALL WAVE.
@@ -177,21 +172,7 @@ Paused --(quit)--> Home
 
 ## 10. Controls
 
-| Input | Action |
-|---|---|
-| `1`–`6` / command card | Select tower to build (ghost follows cursor) |
-| Left click | Place tower / select tower |
-| Right click / `Esc` | Cancel placement or deselect; `Esc` with nothing selected toggles pause |
-| `U` | Upgrade selected tower |
-| `X` | Sell selected tower |
-| `Tab` | Cycle targeting mode of selected tower |
-| `Space` | CALL WAVE (start / call early) |
-| `P` | Pause / resume |
-| `F` | Cycle game speed 1× → 2× → 3× |
-| WASD / arrows / edge-scroll | Pan camera |
-| Mouse wheel | Zoom (3 fixed steps) |
-
-Towers use number keys so WASD stays free for panning.
+Key bindings: `README.md`. Towers use number keys `1`–`6` so WASD stays free for camera panning.
 
 ## 11. Art direction (detail: `docs/design/art-direction.md`)
 
@@ -212,7 +193,7 @@ Towers use number keys so WASD stays free for panning.
 | Waves: explicit lists, 15/18/20; bosses at midpoint and final; Map 1 Chorus-heavy, Map 2 mixed, Map 3 everything incl. both bosses | Director |
 | Difficulty Easy/Normal/Hard/Brutal per systems.md; UI names Recruit/Veteran/Elite/Brutal | Director + lead designer |
 | Group `delay` is absolute from wave start (allows parallel streams on two-path maps) | Lead designer |
-| Mid boss: same boss at ×0.5 HP/shields, 200 bounty; flagged by `WaveDef.boss = 'mid'` | systems.md §7 |
+| Mid boss: same boss at ×0.55 HP/shields, 200 bounty; flagged by `WaveDef.boss = 'mid'` | systems.md §7 |
 | Tower hotkeys 1–6 (WASD is camera pan) | Lead designer |
 | Sim events accumulate until `drainEvents()` instead of clearing each step (a frame may run 0–3 steps) | Lead designer |
 | Commands apply immediately on `dispatch` (between steps); paused accepts only resume/speed | Lead designer |
@@ -228,17 +209,12 @@ Headless bots (`src/sim/autoplay.ts`) play every map × difficulty; `npm run bal
 - **naive**: fixed build order on the max-coverage pad, alternates build/upgrade from 6 towers.
 - **competent**: looks 3 waves ahead; per wave group estimates kill ratio *r* = damage the defense deals while the group walks past ÷ group effective HP (armor, size, shields, splash/chain, regen, overkill), expects `stake × e^(−r/2)` lives to leak and buys the build/upgrade that most reduces the sum of squared expected leaks per credit. Mixes towers and prepares for bosses without hard-coded rules. `competentStrategy(['picket'])` etc. gives the mono-tower variants.
 
-Results (W = win, L = loss; wave reached / lives left):
+Targets (check against `npm run balance`):
 
-| Map | Bot | Recruit | Veteran | Elite | Brutal |
-|---|---|---|---|---|---|
-| Dust Ridge | naive | W 30 | W 19 | L W9 | L W9 |
-| Dust Ridge | competent | W 30 | W 20 | **W 9** | L W9 |
-| Cinder Forge | naive | W 30 | L W18 | L W10 | L W8 |
-| Cinder Forge | competent | W 30 | W 20 | L W18 | L W17 |
-| Hollow Spire | naive | W 30 | L W20 | L W6 | L W4 |
-| Hollow Spire | competent | W 30 | L W20 | L W17 | L W9 |
+- **Recruit:** comfortable everywhere; the naive bot wins it.
+- **Veteran:** the competent bot wins maps 1–2; Hollow Spire's twin-boss final is the wall.
+- **Elite:** wins Dust Ridge narrowly; loses maps 2–3 on their last waves.
+- **Brutal:** dies mid-to-late on every map.
+- **Mixing matters:** no single-tower build (`competentStrategy(['picket'])` etc.) beats the mixed bot; mono builds lose Cinder Forge and Hollow Spire on Veteran; Stasis alone never gets past W2.
 
-Mono-tower competent bot, best single tower: Dust Ridge Veteran Longshot W 17 / Breacher W 16 (mixed W 20), Elite all lose (best Longshot L W13; mixed wins); Cinder Forge and Hollow Spire every mono build loses (best L W18 / L W11 on Veteran) where the mixed bot wins or reaches the final wave. Stasis alone never gets past W2.
-
-Read against the targets: Recruit is comfortable everywhere and the naive bot wins it; Veteran wins maps 1–2 and dies to Hollow Spire's twin-boss final; Elite wins Dust Ridge narrowly and loses maps 2–3 on their last waves; Brutal dies mid-to-late (W9/15, W17/18, W9/20). Known gap: on Brutal, Cinder Forge lasts longer than Dust Ridge (Dust's long single path gives the Choir Mother more births at the W8 mid boss).
+Known gap: on Brutal, Cinder Forge lasts longer than Dust Ridge (Dust's long single path gives the Choir Mother more births at the W8 mid boss).

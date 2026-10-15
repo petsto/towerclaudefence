@@ -1,10 +1,6 @@
 # Build Plan — Tower Defense (StarCraft 1 vibe)
 
-## Locked decisions
-- **Stack:** TypeScript + Vite + Three.js + Vitest. No UI framework (DOM overlays for menus/HUD).
-- **2.5D look:** Three.js orthographic camera at a fixed isometric angle (SC1-style ~3/4 view), low-poly 3D models built from primitives, rendered to a low-res target and upscaled with nearest-neighbour filtering for a pixel-art feel. Limited palette, hard shadows.
-- **Architecture:** a pure, deterministic simulation (`src/sim`, no DOM/Three imports, fixed timestep) driven by data definitions (`src/data`). The renderer (`src/render`) and UI (`src/ui`) only read sim state and dispatch commands. This keeps the game logic testable headlessly and easy for agents to extend.
-- **Original IP only:** SC1 *vibe* (gritty sci-fi, metal console UI, armor/damage-type matchups). No StarCraft names, units, or assets.
+Locked decisions (stack, 2.5D pixel look, sim/render split, original IP): see `AGENTS.md` and GDD §11.
 
 ## Stages
 | # | Stage | Output | Owner(s) |

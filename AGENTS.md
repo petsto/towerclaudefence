@@ -4,7 +4,7 @@ Canonical guide for any agent (or human) working in this repo.
 
 ## Purpose
 
-Browser tower defense game with a StarCraft 1 *vibe*: gritty sci-fi, metal console UI, armor/damage-type matchups, isometric 2.5D look. Original IP only. Build plan and locked decisions: `docs/PLAN.md`. Architecture: `docs/architecture.md`. Design docs: `docs/design/`.
+Browser tower defense game with a StarCraft 1 *vibe*: gritty sci-fi, metal console UI, armor/damage-type matchups, isometric 2.5D look. Original IP only. Build plan and orchestration log: `docs/PLAN.md`. Architecture: `docs/architecture.md`. Design docs: `docs/design/`.
 
 ## Stack
 
@@ -20,6 +20,7 @@ TypeScript (strict) + Vite + Three.js + Vitest. No UI framework: menus and HUD a
 | `npm run test:watch` | Vitest, watch mode |
 | `npm run build` | Typecheck + production build to `dist/` |
 | `npm run preview` | Serve `dist/` |
+| `npm run balance` | Headless bots play every map × difficulty, prints the results table (GDD §13; excluded from `npm test`) |
 
 ## Directory map
 
@@ -28,7 +29,7 @@ index.html        #app: canvas container + #ui overlay
 src/main.ts       boot: wires sim, render, ui, and the game loop
 src/sim/          pure deterministic simulation (no three, no DOM)
 src/data/         definitions: towers, enemies, maps, difficulty
-src/render/       Three.js; reads sim state, draws it (fx.ts: event-driven VFX)
+src/render/       Three.js; reads sim state, draws it (fx.ts: event-driven VFX; camera.ts: pan/zoom input)
 src/audio/        WebAudio-synthesised SFX driven by sim events
 src/ui/           DOM overlays: home screen, HUD, build/sell panel
 dev/              standalone sandbox pages (see below), not shipped
@@ -37,12 +38,12 @@ docs/             plan, architecture, design docs
 
 ### Dev sandboxes
 
-Open via `npm run dev` at `/dev/<name>.html`. Each drives one module with fake state, no sim:
+Open via `npm run dev` at `/dev/<name>.html`:
 
 - `render.html`: renderer on a real map with fake towers/enemies (`?map=<id>`, `?towers=all`).
 - `models.html`: tower (L1–L3) and enemy model showroom.
-- `fx.html`: FX + SFX bench; scripted fake combat plus buttons for every effect and sound.
-- `ui.html`: home screen and HUD over a placeholder stage with a fake `GameState`.
+- `fx.html`: FX + SFX bench; the real renderer + sim played by the competent bot, plus buttons for every effect and sound.
+- `ui.html`: home screen and HUD over a placeholder stage, driven by the real sim and the competent bot (no renderer).
 
 ## Architecture rules
 
@@ -63,9 +64,9 @@ Open via `npm run dev` at `/dev/<name>.html`. Each drives one module with fake s
 
 Design rules: `docs/GDD.md`. Types: `src/data/types.ts`. Sim contract: `src/sim/types.ts`. `src/data/data.test.ts` validates all of it.
 
-- **Tower:** add the id to `TowerId` in `src/data/types.ts`, a `TowerDef` (3 levels: base + 2 upgrades, full stats per level) to `TOWERS` and `TOWER_LIST` in `src/data/towers.ts`, a row in GDD §3; add sim tests if it needs new behaviour (new `Delivery` or stat); add a model in `src/render`.
-- **Enemy:** add the id to `EnemyId`, an `EnemyDef` to `ENEMIES` in `src/data/enemies.ts` (new ability = new `EnemyAbility` variant + sim support + test), a row in GDD §4; reference it from wave groups; add a model in `src/render`.
-- **Map:** add the id to `MapId`, a file `src/data/maps/<id>.ts` (ASCII `layout` + `parseLayout`, `paths` as `[col,row]` waypoints spawn -> core, `waves` built with `g(...)`, palette, `hpGrowth`, `startingCash`), register it in `MAPS` and `MAP_LIST` in `src/data/maps/index.ts`, add its expected wave count/mid boss to `data.test.ts`, a row in GDD §7–8. It appears on the home screen via `MAP_LIST`.
+- **Tower:** add the id to `TowerId` in `src/data/types.ts`, a `TowerDef` (3 levels: base + 2 upgrades, full stats per level) to `TOWERS` and `TOWER_LIST` in `src/data/towers.ts`, rows in both GDD §3 tables; add sim tests if it needs new behaviour (new `Delivery` or stat). Per-tower tables (typecheck flags the `Record`s): `BUILD` in `src/render/models/towers.ts`, `MUZZLE` in `src/render/fx.ts`, `TOWER_ICONS` in `src/ui/icons.ts`, and optionally `SHOT` in `src/audio/sfx.ts` (omit = silent shot) and `DEFAULT_ORDER` in `src/sim/autoplay.ts`. Hardcoded counts (not typechecked): the tower/hotkey count of `6` in `src/data/data.test.ts`, the "[1–6]" hint in `src/ui/hud.ts` and the README controls.
+- **Enemy:** add the id to `EnemyId`, an `EnemyDef` to `ENEMIES` in `src/data/enemies.ts` (new ability = new `EnemyAbility` variant + sim support + test), a row in GDD §4; reference it from wave groups; add a model to `BUILD` in `src/render/models/enemies.ts`.
+- **Map:** add the id to `MapId`, a file `src/data/maps/<id>.ts` (ASCII `layout` + `parseLayout`, `paths` as `[col,row]` waypoints spawn -> core, `waves` built with `g(...)`, palette, `hpGrowth`, `startingCash`), register it in `MAPS` and `MAP_LIST` in `src/data/maps/index.ts`, add its expected wave count/mid boss to `data.test.ts`, a row in GDD §7–8. It appears on the home screen via `MAP_LIST`. A new `Biome` also needs a `decorStyle` case in `src/render/terrain.ts`.
 
 ## Testing
 

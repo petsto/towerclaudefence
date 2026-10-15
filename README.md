@@ -11,6 +11,7 @@ npm install
 npm run dev    # http://localhost:5173
 npm test
 npm run build
+npm run balance  # headless bot results per map × difficulty
 ```
 
 Node 24+.
@@ -41,4 +42,4 @@ Add `?dmg` to the URL to show damage numbers.
 
 ## Dev sandboxes
 
-With `npm run dev` running, `/dev/render.html`, `/dev/models.html`, `/dev/fx.html` and `/dev/ui.html` each exercise one module with fake state (renderer, tower and enemy models, effects and sound, HUD). See [AGENTS.md](AGENTS.md#dev-sandboxes).
+With `npm run dev` running, `/dev/render.html`, `/dev/models.html`, `/dev/fx.html` and `/dev/ui.html` each exercise one module (renderer, tower and enemy models, effects and sound, HUD). See [AGENTS.md](AGENTS.md#dev-sandboxes).
