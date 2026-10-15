@@ -42,6 +42,7 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
     - Frame time: unchanged (0.26–0.55 → 0.25–0.48 ms).
     - Draw calls: 10–19 → 6–9.
     - Terrain GPU memory at 1440p: ~4 MB → 16–21 MB (720p ~5 MB, 5K 36–48 MB).
+- Stage 9 ✅ Command Powers (GDD §14): designer contract (be754ad) → parallel sim (b962915), UI (9fa46a4), FX/audio (f4d4951). Tremor Mines (Q, 30 s, 3 stored, 60% slow field) and Lance Strike (E, 150 s, 6 Plasma pulses, 20% of a boss); charging starts at wave 1 launch. Bots use powers; competent bot now wins Dust Ridge Brutal (accepted: easiest map, full kit).
 
 ## Backlog (deferred until playtest says so)
 - **Sprite atlas memory** (user decides after playtesting; not started). Full roster at 128 px/unit ≈ 100 MB GPU; per-map bake (18 tower levels + that map's enemies only) is lower. Levers, cheapest first:
@@ -54,3 +55,4 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
 - **Terrain load time** (+~250–300 ms; mostly CPU texture generation and mask/AO). Options: a Web Worker or per-biome texture caching.
 - Native-res explosion/death flashes draw as an opaque white disc for a few frames (harsh at 720p); soften in `src/render/fx.ts`.
 - Picket L3 cooldown 0.27 s rounds to 17 ticks (0.283 s); use 0.25 if a tick-exact value matters. Also in Stage 8: Picket upgrades raise rate, Thumper fires 1/2/3 shells (3f5cea2); home previews redrawn in the HD style (2cd0a6d, 2D canvas; a real HD bake cost ~1.6 s).
+- Command Powers follow-ups: optional camera shake on Lance impact (needs the camera rig reachable from `createFx`); strike FX height on raised rock tiles is approximate (0.45); armed power hint stays under the end-game overlay (build mode does the same); AZERTY: Q also pans left (HUD reads `e.key`, camera reads `e.code`); a smaller mid-boss Lance fraction if Dust Ridge Brutal should stay a loss.
