@@ -1,5 +1,5 @@
 // Procedural PBR texture sets drawn on <canvas>: albedo, ORM (G = roughness, B = metalness) and a Sobel normal map
-// derived from a height field. All tileable (Repeat wrap). No image assets.
+// derived from a height field. All tileable (Repeat wrap), 512². No image assets.
 import * as THREE from 'three';
 
 const S = 512;
@@ -247,18 +247,4 @@ export function chitin(seed = 7): TexSet {
     }
   }
   return toTextures(s, 2.2);
-}
-
-/** Soft radial blob for contact shadows under units. */
-export function blobTexture(): THREE.Texture {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const ctx = c.getContext('2d')!;
-  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0, 'rgba(0,0,0,0.85)');
-  g.addColorStop(0.45, 'rgba(0,0,0,0.55)');
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(c);
 }
