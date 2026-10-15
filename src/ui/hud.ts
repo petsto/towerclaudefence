@@ -257,7 +257,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   const overlay = h('div', 'hud-overlay', { hidden: true });
   const vignette = h('div', 'hud-vignette', { 'aria-hidden': 'true' });
 
-  // ---------- boss bar (top centre while a boss is alive)
+  // ---------- boss bar (in the top bar while a boss is alive: between its panels when wide, else its own row below them)
   const bossName = h('span', 'boss-name');
   const bossNums = h('span', 'boss-nums');
   const bossHp = h('div', 'boss-fill boss-hp');
@@ -270,8 +270,9 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     h('div', 'boss-track', {}, bossHp),
     h('div', 'boss-track boss-track-shield', {}, bossShield),
   );
+  top.insertBefore(bossBar, top.lastElementChild);
 
-  const hud = h('div', 'sm-hud', {}, vignette, top, bossBar, floatLayer, flashEl, consoleEl, overlay);
+  const hud = h('div', 'sm-hud', {}, vignette, top, floatLayer, flashEl, consoleEl, overlay);
   root.append(hud);
 
   // ---------- actions

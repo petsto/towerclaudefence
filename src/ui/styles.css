@@ -525,12 +525,20 @@
   left: 0;
   right: 0;
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 6px 8px;
 }
 .hud-mission {
+  /* zero basis: shrinks with an ellipsis instead of wrapping the resources panel onto a second row */
+  flex: 1 1 0;
+  max-width: max-content;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 9px 20px;
   font: 700 13px/1 var(--font-ui);
   letter-spacing: 0.2em;
@@ -1027,11 +1035,11 @@
   background: radial-gradient(ellipse at center, transparent 55%, rgba(255, 20, 10, 0.28));
 }
 .hud-boss {
-  position: absolute;
-  top: 56px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(520px, calc(100vw - 32px));
+  /* its own centred row under the top bar; between the panels when the screen is wide enough (see @media) */
+  order: 1;
+  flex: 1 1 100%;
+  margin: 0 max(0px, (100% - 520px) / 2); /* not max-width: that would let it squeeze onto the panels' line */
+  min-width: 0;
   box-sizing: border-box;
   padding: 7px 12px 8px;
 }
@@ -1043,6 +1051,10 @@
   margin-bottom: 5px;
 }
 .boss-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: 900 13px/1 var(--font-title);
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -1050,6 +1062,7 @@
   text-shadow: 0 0 8px rgba(255, 74, 58, 0.6);
 }
 .boss-nums {
+  white-space: nowrap;
   font: 13px/1 var(--font-mono);
   color: var(--text);
 }
@@ -1207,11 +1220,62 @@
   .portrait-cap { font-size: 12px; }
 }
 
+@media (min-width: 1360px) {
+  .hud-boss { order: 0; flex: 0 1 440px; margin: 0; }
+}
+
+/* narrow screens: the home grid stacks and scrolls; the console drops the portrait, then stacks into two rows */
 @media (max-width: 1000px) {
   .home-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: max-content; /* the panels' min-height: 0 would otherwise squash them into the viewport */
+    align-content: start;
     overflow: auto;
+    padding: 0 12px 12px;
   }
+  .home-maps { overflow: visible; }
+  .hud-console { grid-template-columns: clamp(200px, 26vw, 260px) minmax(0, 1fr) auto; }
+  .con-portrait { display: none; }
+  .info-actions { width: clamp(140px, 17vw, 180px); }
+}
+@media (max-width: 760px) {
+  .sm-hud { --cmd: 52px; }
+  .hud-console {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'wave cmd' 'info info';
+    padding: 16px 10px 10px;
+    gap: 8px;
+  }
+  .con-wave { grid-area: wave; }
+  .con-cmd { grid-area: cmd; }
+  .con-info { grid-area: info; height: 118px; box-sizing: border-box; }
+  .info-main, .info-tip { overflow-y: auto; } /* the actions column stays put */
+  .info-actions { width: 118px; }
+  .sm-hud .btn-act { flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; padding: 0 8px; }
+  .sm-hud .btn-act kbd,
+  .sm-hud .btn-call kbd { display: none; }
+  .act-k { width: auto; font-size: 10px; }
+  .tgt-v, .btn-act .cost { flex: none; font-size: 13px; }
+  .hud-boss { padding: 4px 8px 5px; }
+  .boss-name, .boss-nums { font-size: 11px; }
+  .boss-head { margin-bottom: 3px; }
+  .boss-track { height: 6px; }
+  .boss-track-shield { height: 3px; }
+  .hud-flash { white-space: normal; width: calc(100vw - 32px); box-sizing: border-box; text-align: center; font-size: 15px; }
+}
+@media (max-width: 560px) {
+  .hud-mission { display: none; }
+  .hud-res { flex: 1; flex-wrap: wrap; justify-content: space-between; height: auto; min-height: 42px; gap: 4px 12px; padding: 4px 6px 4px 12px; }
+  .res-btns { margin-left: auto; }
+  .home-maps, .home-brief { padding: 12px; }
+  .brief-top, .brief-bottom { grid-template-columns: minmax(0, 1fr); }
+  .brief-thumb { justify-self: center; }
+  .diff-switch { display: flex; }
+  .diff-seg { flex: 1; }
+  .diff-seg span { padding: 8px 4px; font-size: 13px; letter-spacing: 0.08em; text-align: center; }
+  .sm-home .btn-launch { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {

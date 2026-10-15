@@ -3,10 +3,10 @@
 // createSprites then draws atlas frames as camera-plane quads anchored at the unit's ground point, painter-sorted,
 // in one instanced draw call (premultiplied alpha, no depth test).
 //
-// Frames per entry: tower = TOWER_YAW turret frames (turret at yaw f/TOWER_YAW·2π, shadowing the base only) + one
-// static base frame (TOWER_BASE); draw base then turret at the same anchor. A tower without turret parts gets only the
-// base frame (Atlas.turret(key) = false). Enemy = WALK × ENEMY_YAW frames, see
-// enemyFrame. Cells are sized per entry from the model's bounds + its shadow, so small units cost little.
+// Frames per entry: tower = TOWER_YAW turret frames (turret at yaw f/TOWER_YAW·2π, shadowing the base and the ground
+// the base's own shadow doesn't already cover) + one static base frame (TOWER_BASE); draw base then turret at the same
+// anchor. A tower without turret parts gets only the base frame (Atlas.turret(key) = false). Enemy = WALK × ENEMY_YAW
+// frames, see enemyFrame. Cells are sized per entry from the model's bounds + its shadow, so small units cost little.
 import * as THREE from 'three';
 import type { Built, MatId } from './kit';
 
@@ -131,10 +131,19 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
   cam.lookAt(0, 0, 0);
 
   const down = new THREE.ShaderMaterial({
-    uniforms: { t: { value: null } },
+    uniforms: { t: { value: null }, base: { value: null }, useBase: { value: false } },
     vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-    // bilinear tap at each 2x2 block centre = box filter. Premultiplied (cleared to 0,0,0,0): keep rgb <= a after clamping HDR
-    fragmentShader: 'uniform sampler2D t; varying vec2 vUv; void main() { vec4 c = texture2D(t, vUv); c.a = clamp(c.a, 0.0, 1.0); c.rgb = min(c.rgb, vec3(c.a)); gl_FragColor = c; }',
+    // bilinear tap at each 2x2 block centre = box filter. Premultiplied (cleared to 0,0,0,0): keep rgb <= a after clamping HDR.
+    // Turret frames (useBase): a pure-shadow texel (rgb exactly 0) over ground (base frame alpha <= its 0.6 shadow) keeps only
+    // what the base sprite's shadow under it doesn't already give, so base + turret composite to one shadow, not a double one.
+    fragmentShader: /* glsl */ `
+      uniform sampler2D t; uniform sampler2D base; uniform bool useBase; varying vec2 vUv;
+      void main() {
+        vec4 c = texture2D(t, vUv); c.a = clamp(c.a, 0.0, 1.0); c.rgb = min(c.rgb, vec3(c.a));
+        float b = useBase ? clamp(texture2D(base, vUv).a, 0.0, 1.0) : 1.0;
+        if (b < 0.62 && c.r + c.g + c.b == 0.0) c.a = max(0.0, c.a - b) / (1.0 - b);
+        gl_FragColor = c;
+      }`,
     blending: THREE.NoBlending, depthTest: false, depthWrite: false,
   });
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), down);
@@ -157,10 +166,12 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
     Object.assign(sun.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 30 });
     sun.shadow.camera.updateProjectionMatrix();
     ground.scale.setScalar(ext * 2.5);
-    const scratch = new THREE.WebGLRenderTarget(c.wPx * 2, c.hPx * 2, { type: THREE.HalfFloatType, samples: 4 });
-    down.uniforms.t!.value = scratch.texture;
-    const shoot = (frame: number): void => {
-      gl.setRenderTarget(scratch);
+    const rt = (): THREE.WebGLRenderTarget => new THREE.WebGLRenderTarget(c.wPx * 2, c.hPx * 2, { type: THREE.HalfFloatType, samples: 4 });
+    const scratch = rt();
+    const baseShot = c.turret ? rt() : scratch; // kept through the turret frames: their shadow is cut against it
+    const shoot = (frame: number, into = scratch): void => {
+      down.uniforms.t!.value = into.texture;
+      gl.setRenderTarget(into);
       gl.clear();
       gl.render(scene, cam);
       const [u, v] = c.uv[frame]!;
@@ -178,23 +189,25 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
       scene.add(root);
       if (e.tower) {
         turret.visible = false;
-        shoot(TOWER_BASE);
+        shoot(TOWER_BASE, baseShot);
         if (!c.turret) {
           scene.remove(root);
           return;
         }
-        // turret frames: the base only catches the turret's shadow (and occludes); the base sprite draws it
+        // turret frames: the base only catches the turret's shadow (and occludes); the base sprite draws it. The ground
+        // catches it too, minus the base's own shadow (see `down`).
         turret.visible = true;
-        ground.visible = false;
         for (const m of baseMeshes) {
           m.material = baseCatcher;
           m.castShadow = false;
         }
+        down.uniforms.base!.value = baseShot.texture;
+        down.uniforms.useBase!.value = true;
         for (let f = 0; f < TOWER_YAW; f++) {
           turret.rotation.y = -(f / TOWER_YAW) * Math.PI * 2;
           shoot(f);
         }
-        ground.visible = true;
+        down.uniforms.useBase!.value = false;
       } else {
         for (let f = 0; f < ENEMY_YAW; f++) {
           root.rotation.y = -(f / ENEMY_YAW) * Math.PI * 2;
@@ -204,6 +217,7 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
       scene.remove(root);
     });
     scratch.dispose();
+    if (baseShot !== scratch) baseShot.dispose();
   }
   atlas.scissorTest = false;
   gl.readRenderTargetPixels(atlas, 0, 0, 1, 1, new Uint8Array(4)); // wait for the GPU so `ms` is the real bake time
@@ -258,7 +272,11 @@ export interface SpriteItem {
   scale?: number; alpha?: number; flash?: number; slow?: number; shield?: number;
 }
 
-export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.InstancedMesh; set(list: SpriteItem[], time?: number): void } {
+/**
+ * `depth`: override material that writes only the sprites' opaque body into the depth buffer (each sprite at its
+ * anchor's depth: the quad lies in the camera plane), so a later pass can depth-test against unit silhouettes.
+ */
+export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.InstancedMesh; depth: THREE.Material; set(list: SpriteItem[], time?: number): void } {
   const geo = new THREE.PlaneGeometry(1, 1); // only its uv (0..1) is used
   const attr = (): THREE.InstancedBufferAttribute => new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage);
   const aUv = attr(), aQuad = attr(), aFx = attr();
@@ -266,10 +284,8 @@ export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.Instance
   geo.setAttribute('aQuad', aQuad);
   geo.setAttribute('aFx', aFx);
   const time = { value: 0 };
-  const mat = new THREE.ShaderMaterial({
-    uniforms: { atlas: { value: atlas.texture }, time },
-    defines: { SIN_P: SIN.toFixed(6), COS_P: COS.toFixed(6) },
-    vertexShader: /* glsl */ `
+  const defines = { SIN_P: SIN.toFixed(6), COS_P: COS.toFixed(6) };
+  const vertexShader = /* glsl */ `
       attribute vec4 aUv; attribute vec4 aQuad; attribute vec4 aFx; varying vec2 vUv; varying vec2 vQ; varying vec4 vFx;
       void main() {
         vUv = aUv.xy + uv * aUv.zw;
@@ -277,7 +293,11 @@ export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.Instance
         vQ = q;
         vFx = aFx;
         gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(q.x, q.y * COS_P, -q.y * SIN_P, 1.0);
-      }`,
+      }`;
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { atlas: { value: atlas.texture }, time },
+    defines,
+    vertexShader,
     fragmentShader: /* glsl */ `
       uniform sampler2D atlas; uniform float time; varying vec2 vUv; varying vec2 vQ; varying vec4 vFx; // flash, slow, shield, alpha
       void main() {
@@ -297,6 +317,16 @@ export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.Instance
     transparent: true, depthTest: false, depthWrite: false,
     blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
   });
+  const depth = new THREE.ShaderMaterial({
+    uniforms: mat.uniforms,
+    defines,
+    vertexShader,
+    // body only: the baked ground shadow (alpha <= 0.6) and faded-out (sold) sprites don't occlude
+    fragmentShader: /* glsl */ `
+      uniform sampler2D atlas; varying vec2 vUv; varying vec4 vFx;
+      void main() { if (texture2D(atlas, vUv).a * vFx.w < 0.75) discard; gl_FragColor = vec4(0.0); }`,
+    colorWrite: false,
+  });
   const mesh = new THREE.InstancedMesh(geo, mat, cap);
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   mesh.frustumCulled = false;
@@ -304,6 +334,7 @@ export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.Instance
   const m4 = new THREE.Matrix4();
   return {
     mesh,
+    depth,
     set(list, t = 0) {
       time.value = t;
       list.sort((a, b) => a.z - b.z || a.order - b.order); // painter's order: farther rows first, base under turret

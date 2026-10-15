@@ -98,10 +98,11 @@ function play(cfg: SimConfig): void {
   };
   document.addEventListener('visibilitychange', onVisibility);
 
-  // Bottom console covers the canvas; let the camera scroll the bottom rows above it.
+  // Top bar (+ boss bar) and bottom console cover the canvas; let the camera scroll the edge rows clear of them.
+  const topEl = ui.querySelector<HTMLElement>('.hud-top');
   const consoleEl = ui.querySelector<HTMLElement>('.hud-console');
-  const ro = new ResizeObserver(() => renderer.setBottomInset(consoleEl?.offsetHeight ?? 0));
-  if (consoleEl) ro.observe(consoleEl);
+  const ro = new ResizeObserver(() => renderer.setInsets(topEl?.offsetHeight ?? 0, consoleEl?.offsetHeight ?? 0));
+  for (const el of [topEl, consoleEl]) if (el) ro.observe(el);
 
   function updateOverlays(): void {
     const s = game.state;

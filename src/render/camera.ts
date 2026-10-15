@@ -5,8 +5,8 @@ export const PITCH = THREE.MathUtils.degToRad(55);
 const SIN = Math.sin(PITCH);
 const COS = Math.cos(PITCH);
 const DIST = 60;
-// Low-res texels per world unit. The game opens at 30: a quarter closer than the old fit-the-whole-fight framing
-// (which landed on 24 on every map at 16:9), so units read at StarCraft-like size; the player pans to the spawns.
+// Low-res texels per world unit. The game opens at 30 (units read at StarCraft-like size), or the closest step
+// below it that still fits every spawn and the core.
 const ZOOMS = [24, 30, 40] as const;
 const DEFAULT_ZOOM = 1;
 export const DEFAULT_PPU: number = ZOOMS[DEFAULT_ZOOM];
@@ -17,11 +17,12 @@ export interface CameraRig {
   readonly camera: THREE.OrthographicCamera;
   /** Recompute frustum for a render target of this size. */
   setTargetSize(w: number, h: number): void;
-  /** Low-res texels of screen covered by the bottom HUD; lets the last rows scroll above it. */
-  setBottomInset(texels: number): void;
+  /** Low-res texels of screen covered by the top / bottom HUD; lets the edge rows scroll clear of it. */
+  setInsets(top: number, bottom: number): void;
   /**
-   * Centre this world rect (x = col, z = row) in the view above the bottom inset at the default zoom; `keep` (the
-   * core) stays in view when the rect doesn't fit. Re-applied on resize/inset until the player pans or zooms.
+   * Centre this world rect (x = col, z = row) in the view between the insets at the closest zoom up to the default
+   * that fits it (else the widest); `keep` (the core) stays in view when even that doesn't fit. Re-applied on
+   * resize/inset until the player pans or zooms.
    */
   frame(rect: { x0: number; z0: number; x1: number; z1: number }, keep: { x: number; z: number }): void;
   update(dt: number): void;
@@ -34,6 +35,7 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
   let rtW = 1;
   let rtH = 1;
   let inset = 0;
+  let insetTop = 0;
   // Start looking at the map centre, then clamp.
   let tx = cols / 2;
   let tz = rows / 2;
@@ -58,8 +60,9 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
     if (!focus) return;
     const { rect: r, keep } = focus;
     const viewW = (p: number): number => rtW / p;
-    const viewD = (p: number): number => (rtH - inset) / (p * SIN); // world z rows visible above the console
+    const viewD = (p: number): number => (rtH - inset - insetTop) / (p * SIN); // world z rows visible between the HUD bars
     zoom = DEFAULT_ZOOM;
+    while (zoom > 0 && (r.x1 - r.x0 > viewW(ppu()) || r.z1 - r.z0 > viewD(ppu()))) zoom--;
     size();
     const p = ppu();
     const w = viewW(p) / 2 - 1.5;
@@ -68,7 +71,7 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
     const cx = clampRange((r.x0 + r.x1) / 2, keep.x - w, keep.x + w);
     const cz = clampRange((r.z0 + r.z1) / 2, keep.z - d, keep.z + d);
     tx = cx;
-    tz = cz + inset / (2 * p * SIN); // the band's centre sits above the camera target by half the inset
+    tz = cz + (inset - insetTop) / (2 * p * SIN); // the band's centre sits off the camera target by half the inset difference
   }
 
   function place(): void {
@@ -77,7 +80,7 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
     const viewW = rtW / p;
     const viewH = rtH / p;
     tx = clampRange(tx, viewW / 2 - 1, cols - viewW / 2 + 1);
-    tz = clampRange(tz, viewH / (2 * SIN) - 1, rows - viewH / (2 * SIN) + 1 + inset / p / SIN);
+    tz = clampRange(tz, viewH / (2 * SIN) - 1 - insetTop / p / SIN, rows - viewH / (2 * SIN) + 1 + inset / p / SIN);
     // Snap to the texel grid so static geometry doesn't shimmer while panning.
     const sx = Math.round(tx * p) / p;
     const sz = Math.round(tz * p * SIN) / (p * SIN);
@@ -124,8 +127,9 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
       size();
       place();
     },
-    setBottomInset(texels) {
-      inset = texels;
+    setInsets(top, bottom) {
+      insetTop = top;
+      inset = bottom;
       place();
     },
     frame(rect, keep) {

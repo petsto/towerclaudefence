@@ -28,7 +28,7 @@ export function createPixelPass(): PixelPass {
     generateMipmaps: false,
   });
   const uvScale = new THREE.Vector2(1, 1);
-  const material = new THREE.ShaderMaterial({
+  const params: THREE.ShaderMaterialParameters = {
     uniforms: {
       tScene: { value: target.texture },
       uvScale: { value: uvScale },
@@ -66,11 +66,14 @@ export function createPixelPass(): PixelPass {
     `,
     depthTest: false,
     depthWrite: false,
+  };
+  const material = new THREE.ShaderMaterial(params);
+  // not material.clone(): that deep-copies the uniforms, which can't clone a render target's texture (and warns)
+  const overlay = new THREE.ShaderMaterial({
+    ...params, // same uniforms object: target, uvScale, levels
+    defines: { OVERLAY: '' },
+    transparent: true, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
   });
-  const overlay = material.clone();
-  overlay.uniforms = material.uniforms; // same target, uvScale, levels
-  overlay.defines = { OVERLAY: '' };
-  Object.assign(overlay, { transparent: true, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor });
   const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
   quad.frustumCulled = false;
   const scene = new THREE.Scene();

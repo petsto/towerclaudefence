@@ -1,6 +1,7 @@
 // Renderer entry: owns the WebGL context, scene, lights, pixel pass, unit sprite atlas and interaction overlays.
 // Per frame: world (terrain, ground decals, hover/range/selection) at ~384p posterized -> unit sprites at native
-// resolution -> overlay layer (airborne FX, HP bars) at ~384p over them, depth-tested against the world.
+// resolution -> overlay layer (airborne FX, HP bars) at ~384p over them, depth-tested against the world and the
+// sprites' silhouettes.
 import * as THREE from 'three';
 import { ENEMIES, TOWER_LIST } from '../data';
 import type { EnemyId, MapDef } from '../data/types';
@@ -43,8 +44,8 @@ export interface Renderer {
   setHover(tile: { col: number; row: number } | null, valid: boolean): void;
   setRangePreview(preview: { x: number; y: number; rangeTiles: number } | null): void;
   setSelectedTower(id: number | null): void;
-  /** CSS pixels of the container covered by the bottom HUD console. */
-  setBottomInset(cssPx: number): void;
+  /** CSS pixels of the container covered by the top HUD bar(s) and the bottom HUD console. */
+  setInsets(topCss: number, bottomCss: number): void;
   /** CSS pixels relative to the container. */
   worldToScreen(x: number, y: number, height?: number): { x: number; y: number };
   dispose(): void;
@@ -129,7 +130,7 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
 
   // --- sizing -------------------------------------------------------------------------------
   const size = new THREE.Vector2();
-  let insetCss = 0;
+  const insetCss = { top: 0, bottom: 0 };
   let rtH = 1;
   function resize(): void {
     gl.setPixelRatio(window.devicePixelRatio);
@@ -140,7 +141,8 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
     const { w, h } = pixel.resize(size.x, size.y);
     rtH = h;
     rig.setTargetSize(w, h);
-    rig.setBottomInset((insetCss * h) / Math.max(1, container.clientHeight));
+    const k = h / Math.max(1, container.clientHeight);
+    rig.setInsets(insetCss.top * k, insetCss.bottom * k);
   }
   resize();
 
@@ -217,10 +219,14 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
       pixel.blit(gl);
       syncSpriteCam();
       gl.render(spriteScene, spriteCam);
-      // overlay: same target re-cleared to transparent, world depth kept so FX still hide behind terrain
+      // overlay: same target re-cleared to transparent, world depth kept so FX still hide behind terrain; the unit
+      // sprites' silhouettes go into that depth too, so a shot or blast behind a tower/enemy hides behind it
       gl.setRenderTarget(pixel.target);
       gl.setClearColor(0x000000, 0);
       gl.clear(true, false, false);
+      spriteScene.overrideMaterial = units.spriteDepth;
+      gl.render(spriteScene, camera);
+      spriteScene.overrideMaterial = null;
       camera.layers.set(OVERLAY_LAYER);
       scene.background = null;
       gl.render(scene, camera);
@@ -257,8 +263,8 @@ export function createRenderer(container: HTMLElement, map: MapDef): Renderer {
     setSelectedTower(id) {
       selectedId = id;
     },
-    setBottomInset(cssPx) {
-      insetCss = cssPx;
+    setInsets(topCss, bottomCss) {
+      Object.assign(insetCss, { top: topCss, bottom: bottomCss });
       resize();
     },
     worldToScreen(x, y, height = 0) {

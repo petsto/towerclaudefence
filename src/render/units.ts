@@ -1,6 +1,7 @@
 // Syncs sim towers/enemies into atlas sprites (./hd): tower = static base frame + turret yaw frame, enemy = heading ×
 // walk-phase frame. Per-sprite hit flash, slow tint, shield shimmer and build/sell/upgrade pops. HP/shield bars live in
-// the overlay layer, drawn over the sprites.
+// the overlay layer, drawn over the sprites; in a clump only the leader's bar shows (enemies earlier in the sim list
+// are further along).
 import * as THREE from 'three';
 import type { EnemyId } from '../data/types';
 import type { GameState, TowerState } from '../sim/types';
@@ -12,6 +13,9 @@ import { OVERLAY_LAYER } from './pixel';
 const BAR_W = 0.5;
 const BAR_H = 0.07;
 const SHIELD_H = 0.04;
+const BAR_GAP_X = BAR_W * 0.8; // a bar closer than this (and BAR_GAP_Y) on screen to an already drawn one is skipped
+const BAR_GAP_Y = 0.2;
+const COS_P = Math.cos(PITCH), SIN_P = Math.sin(PITCH); // screen up = y·cos − z·sin
 const FLASH_S = 0.08;
 const FLASH_GAP = 0.16; // dark time before a hit can flash again: sustained fire blinks (~4 Hz) instead of staying white
 const BUILD_S = 0.4;
@@ -23,6 +27,8 @@ const SPRITE_CAP = 1024; // 2 per tower + 1 per enemy
 export interface Units {
   /** Unit sprites: drawn at native resolution between the pixel pass and the overlay. */
   readonly sprites: THREE.Object3D;
+  /** Override material for `sprites`: writes their opaque silhouettes to depth only (FX occlusion). */
+  readonly spriteDepth: THREE.Material;
   sync(state: GameState, frameDt: number): void;
   towerPosition(id: number): THREE.Vector3 | null;
   dispose(): void;
@@ -70,6 +76,7 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
   const white = new THREE.Color(1, 1, 1);
   const barBg = new THREE.Color('#080808');
   const shieldCol = new THREE.Color('#3aa0ff');
+  const placed: number[] = []; // screen (x, up) of the bars drawn this frame
 
   function ensureBars(n: number): void {
     if (n <= barCap) return;
@@ -145,6 +152,7 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
     for (const en of state.enemies) if (en.hp < en.maxHp || en.shield < en.maxShield) damaged++;
     ensureBars(damaged * 3);
     let b = 0;
+    placed.length = 0;
 
     for (const en of state.enemies) {
       const { x, y: z, heading } = interp.enemy(en);
@@ -166,8 +174,13 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
         flash: Math.max(0, a.flash) / FLASH_S, slow: en.slowed ? 1 : 0, shield: en.shield > 0 ? 0.3 + 0.7 * (en.shield / en.maxShield) : 0,
       });
 
-      if (en.hp < en.maxHp || en.shield < en.maxShield) {
-        const by = y + atlas.bounds(en.defId).h + 0.15;
+      const by = y + atlas.bounds(en.defId).h + 0.15;
+      const up = by * COS_P - z * SIN_P;
+      // ponytail: O(damaged²) overlap scan; a spatial grid if waves ever field hundreds of damaged enemies at once
+      let free = en.hp < en.maxHp || en.shield < en.maxShield;
+      for (let i = 0; free && i < placed.length; i += 2) free = Math.abs(placed[i]! - x) >= BAR_GAP_X || Math.abs(placed[i + 1]! - up) >= BAR_GAP_Y;
+      if (free) {
+        placed.push(x, up);
         const x0 = x - BAR_W / 2;
         const hf = Math.max(0, en.hp / en.maxHp);
         const rows = en.maxShield > 0 ? BAR_H + SHIELD_H + 0.02 : BAR_H;
@@ -187,6 +200,7 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
 
   return {
     sprites: sprites.mesh,
+    spriteDepth: sprites.depth,
     sync(state, frameDt) {
       frame++;
       clock += frameDt;
@@ -202,6 +216,7 @@ export function createUnits(scene: THREE.Scene, interp: Interp, atlas: Atlas, to
     dispose() {
       sprites.mesh.geometry.dispose();
       (sprites.mesh.material as THREE.Material).dispose();
+      sprites.depth.dispose();
       sprites.mesh.dispose();
       bars.dispose();
       barGeo.dispose();
