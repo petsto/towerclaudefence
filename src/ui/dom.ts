@@ -1,0 +1,39 @@
+// Tiny DOM helpers shared by the home screen and HUD.
+
+type Attrs = Record<string, string | number | boolean | undefined>;
+
+/** Create an element. `cls` is a space-separated class list; attrs with false/undefined are skipped. */
+export function h<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  cls = '',
+  attrs: Attrs = {},
+  ...children: (Node | string)[]
+): HTMLElementTagNameMap[K] {
+  const el = document.createElement(tag);
+  if (cls) el.className = cls;
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === false || v === undefined) continue;
+    el.setAttribute(k, v === true ? '' : String(v));
+  }
+  el.append(...children);
+  return el;
+}
+
+/** Write text only when it changed (update() runs every frame). */
+export function setText(el: HTMLElement, text: string): void {
+  if (el.textContent !== text) el.textContent = text;
+}
+
+export function setAttr(el: HTMLElement, name: string, value: string | null): void {
+  if (el.getAttribute(name) === value) return;
+  if (value === null) el.removeAttribute(name);
+  else el.setAttribute(name, value);
+}
+
+export function prefersReducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+export function fmtInt(n: number): string {
+  return Math.floor(n).toLocaleString('en-US');
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UI sandbox</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #app, #stage { position: absolute; inset: 0; }
+      #stage {
+        background:
+          repeating-linear-gradient(0deg, #ffffff06 0 1px, transparent 1px 40px),
+          repeating-linear-gradient(90deg, #ffffff06 0 1px, transparent 1px 40px),
+          radial-gradient(ellipse at 50% 40%, #2a2218, #0c0906);
+      }
+      #ui { position: absolute; inset: 0; pointer-events: none; }
+      #devbar { position: absolute; top: 56px; left: 8px; display: flex; gap: 4px; z-index: 5; font: 12px monospace; }
+      #devbar button { font: inherit; }
+      .fake-tower { position: absolute; width: 40px; height: 40px; left: 45%; top: 40%; background: #4a6f9a; border: 2px solid #ffb030; cursor: pointer; }
+      .fake-tower.sel { outline: 2px solid #3cff9e; outline-offset: 4px; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="stage"></div>
+      <div id="ui"></div>
+    </div>
+    <script type="module" src="./ui.ts"></script>
+  </body>
+</html>
