@@ -325,7 +325,6 @@
 }
 .thumb {
   display: block;
-  image-rendering: pixelated;
 }
 .map-card .thumb {
   width: 96px;

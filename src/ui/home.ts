@@ -56,7 +56,7 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
   const mapList = h('div', 'home-maplist', { role: 'radiogroup', 'aria-label': 'Theatre of operations' });
   for (const m of MAP_LIST) {
     const thumb = h('canvas', 'thumb');
-    drawMapThumbnail(thumb, m, 4);
+    drawMapThumbnail(thumb, m, 8);
     const input = h('input', 'sr-only', { type: 'radio', name: 'sm-map', value: m.id, checked: m.id === mapId });
     input.addEventListener('change', () => selectMap(m.id));
     mapList.append(
@@ -171,7 +171,7 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
     save(LS_MAP, id);
     const m = MAPS[id];
     briefTitle.textContent = m.name;
-    drawMapThumbnail(briefThumb, m, 10);
+    drawMapThumbnail(briefThumb, m, 20);
     typeBriefing(m);
     renderIntel();
   }
