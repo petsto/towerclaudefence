@@ -1,6 +1,6 @@
 # Steel Meridian
 
-A browser tower defense with a gritty late-90s RTS feel: an isometric 2.5D battlefield rendered at low resolution and upscaled as pixel art, a metal command console, and armor-versus-damage-type matchups. Hold the colony core against the Chorus swarm and Remnant war machines across three theatres and four difficulties.
+A browser tower defense with a gritty late-90s RTS feel: an isometric 2.5D battlefield of pre-rendered HD terrain and unit sprites, a metal command console, and armor-versus-damage-type matchups. Hold the colony core against the Chorus swarm and Remnant war machines across three theatres and four difficulties.
 
 TypeScript + Three.js + Vite, no UI framework. Original IP.
 

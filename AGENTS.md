@@ -29,8 +29,10 @@ index.html        #app: canvas container + #ui overlay
 src/main.ts       boot: wires sim, render, ui, and the game loop
 src/sim/          pure deterministic simulation (no three, no DOM)
 src/data/         definitions: towers, enemies, maps, difficulty
-src/render/       Three.js; reads sim state, draws it (fx.ts: event-driven VFX; camera.ts: pan/zoom input;
-                  hd/: HD unit models + sprite atlas bake, contract in hd/index.ts)
+src/render/       Three.js; reads sim state, draws it at native res (index.ts: renderer, load-time bakes, frame order;
+                  units.ts: sprite billboards; fx.ts: event-driven VFX; camera.ts: pan/zoom input; view.ts: camera
+                  sizing grid; hd/: HD unit models + sprite atlas bake, contract in hd/index.ts; hd/terrain/: HD map
+                  scene pre-rendered once per map, spec docs/terrain-hd.md)
 src/audio/        WebAudio-synthesised SFX driven by sim events
 src/ui/           DOM overlays: home screen, HUD, build/sell panel
 dev/              standalone sandbox pages (see below), not shipped
@@ -41,8 +43,8 @@ docs/             plan, architecture, design docs
 
 Open via `npm run dev` at `/dev/<name>.html`:
 
-- `render.html`: renderer on a real map with fake towers/enemies (`?map=<id>`, `?towers=all`).
-- `models.html`: HD model showroom: real-time close-up + baked sprites over pixel terrain (`?unit=<id>&level=<n>`, no `unit` = all units; `&ppu=`, `&zoom=`, `&map=`, `&still`; low-poly fallbacks greyed in the nav).
+- `render.html`: renderer on a real map with fake towers/enemies (`?map=<id>`, `?towers=all`, `?enemies=<n>` per path, `?res=WxH` fixed drawing buffer); `window.__bench(frames)` prints ms/frame + draw calls at zoom 24/30/40, `__step(dt)` renders one frame, `__load` has bake times/sizes.
+- `models.html`: HD model showroom: real-time close-up + baked sprites over the baked HD terrain (`?unit=<id>&level=<n>`, no `unit` = all units; `&ppu=`, `&zoom=`, `&map=`, `&still`); `window.__draw(dt)` renders when the pane is hidden.
 - `fx.html`: FX + SFX bench; the real renderer + sim played by the competent bot, plus buttons for every effect and sound.
 - `ui.html`: home screen and HUD over a placeholder stage, driven by the real sim and the competent bot (no renderer).
 
@@ -67,7 +69,7 @@ Design rules: `docs/GDD.md`. Types: `src/data/types.ts`. Sim contract: `src/sim/
 
 - **Tower:** add the id to `TowerId` in `src/data/types.ts`, a `TowerDef` (3 levels: base + 2 upgrades, full stats per level) to `TOWERS` and `TOWER_LIST` in `src/data/towers.ts`, rows in both GDD §3 tables; add sim tests if it needs new behaviour (new `Delivery` or stat). HD model: `src/render/hd/towers/<id>.ts` (`(level) => Built`, see the contract in `src/render/hd/index.ts`) registered in `HD_TOWERS` (a full `Record`, so typecheck demands it); FX muzzle points come from the model (turret's +X tip; `arc_coil` fires from its crown, see `muzzleOf` in `src/render/fx.ts`); check it in `/dev/models.html?unit=<id>`. Per-tower tables (typecheck flags the `Record`s): `TOWER_ICONS` in `src/ui/icons.ts`, and optionally `SHOT` in `src/audio/sfx.ts` (omit = silent shot) and `DEFAULT_ORDER` in `src/sim/autoplay.ts`. Hardcoded counts (not typechecked): the tower/hotkey count of `6` in `src/data/data.test.ts`, the "[1–6]" hint in `src/ui/hud.ts` and the README controls.
 - **Enemy:** add the id to `EnemyId`, an `EnemyDef` to `ENEMIES` in `src/data/enemies.ts` (new ability = new `EnemyAbility` variant + sim support + test), a row in GDD §4; reference it from wave groups; add an HD model `src/render/hd/enemies/<id>.ts` (`(walkPhase) => Built`) registered in `HD_ENEMIES` (a full `Record`, so typecheck demands it).
-- **Map:** add the id to `MapId`, a file `src/data/maps/<id>.ts` (ASCII `layout` + `parseLayout`, `paths` as `[col,row]` waypoints spawn -> core, `waves` built with `g(...)`, palette, `hpGrowth`, `startingCash`), register it in `MAPS` and `MAP_LIST` in `src/data/maps/index.ts`, add its expected wave count/mid boss to `data.test.ts`, a row in GDD §7–8. It appears on the home screen via `MAP_LIST`. A new `Biome` also needs a `decorStyle` case in `src/render/terrain.ts`.
+- **Map:** add the id to `MapId`, a file `src/data/maps/<id>.ts` (ASCII `layout` + `parseLayout`, `paths` as `[col,row]` waypoints spawn -> core, `waves` built with `g(...)`, palette, `hpGrowth`, `startingCash`), register it in `MAPS` and `MAP_LIST` in `src/data/maps/index.ts`, add its expected wave count/mid boss to `data.test.ts`, a row in GDD §7–8. It appears on the home screen via `MAP_LIST`. A new `Biome` also needs a `style()` case in `src/render/hd/terrain/build.ts` (decor recipe + `TerrainLook`) and its own `ground`/`path`/`rock` branches in `src/render/hd/terrain/textures.ts` (otherwise it falls through to the crystal look); check it in `/dev/render.html?map=<id>`.
 
 ## Testing
 

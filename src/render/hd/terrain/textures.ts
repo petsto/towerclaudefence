@@ -77,15 +77,17 @@ function ground(biome: Biome, p: MapPalette, seed: number): TexSet {
     }
     if (biome === 'volcanic') {
       const wu = (fbm(u, v, 5, seed + 10) - 0.5) * 0.05, wv = (fbm(u, v, 5, seed + 11) - 0.5) * 0.05;
-      const pl = worley(wrap(u + wu, 1), wrap(v + wv, 1), 5, seed + 3);
+      // ash crust: big, flat, faint plates (3 per texture vs the path's 5 flagstones) so the ground never reads as paving;
+      // crack widths are scaled by the cell size to keep the same texel width
+      const pl = worley(wrap(u + wu, 1), wrap(v + wv, 1), 3, seed + 3);
       const edge = pl.d2 - pl.d1;
-      const crack = 1 - sstep(0.0, 0.05, edge);
-      const core = 1 - sstep(0.0, 0.018, edge);
+      const crack = 1 - sstep(0.0, 0.03, edge);
+      const core = 1 - sstep(0.0, 0.011, edge);
       const ash = pebbles(u, v, 60, seed + 5, 0.26);
-      let c = mul(base, 0.85 + (mid - 0.5) * 0.4 + (grain - 0.5) * 0.18 + pl.id * 0.12);
+      let c = mul(base, 0.85 + (mid - 0.5) * 0.4 + (grain - 0.5) * 0.18 + pl.id * 0.05);
       if (ash.h > 0) c = mix(c, ash.tone > 0.85 ? mul(base, 1.35) : mul(base, 0.6), sstep(0, 0.3, ash.h) * 0.8);
-      c = mix(c, [0.05, 0.03, 0.03], crack * 0.4);
-      return [mid * 0.3 + grain * 0.2 + ash.h * 0.4 - crack * 0.9 + (1 - crack) * pl.d1 * 0.15, c, 0.92 - crack * 0.1, core * sstep(0.35, 0.55, fbm(u, v, 3, seed + 6))];
+      c = mix(c, [0.05, 0.03, 0.03], crack * 0.25);
+      return [mid * 0.3 + grain * 0.2 + ash.h * 0.4 - crack * 0.5, c, 0.92 - crack * 0.1, core * sstep(0.35, 0.55, fbm(u, v, 3, seed + 6))];
     }
     // crystal: creep — low organic swells crossed by a ridged vein network, wet in the veins, rare glowing pustules.
     // Stays near the dark palette ground: the shader's macro tint adds groundAlt, the path must stay the brighter lane.

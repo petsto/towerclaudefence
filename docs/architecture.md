@@ -43,7 +43,18 @@ input (mouse/keys, UI buttons)
 
 Canvas mouse input (hover, build placement, tower selection) lives in `src/main.ts`; game hotkeys live in the HUD (`src/ui/hud.ts`); camera pan/zoom (WASD, arrows, edge-pan, wheel) lives in `src/render/camera.ts`.
 
-Rendering (`src/render/index.ts`): terrain, decals and overlays render at ~384p and are posterized; units are HD PBR models (`src/render/hd/`, one file per tower/enemy, registered in full `Record`s so every id needs a model) baked once per map load into a sprite atlas (16 turret yaws + base per tower level, 8 yaws × 4 walk phases per enemy) and drawn as native-resolution billboards (`src/render/units.ts`) between the world pass and the overlay pass (airborne FX, HP bars; depth-tested against the world and a depth-only pass of the sprites' silhouettes, so FX behind a unit hide behind it).
+Rendering (`src/render/index.ts`): everything draws at native resolution straight to the canvas; there is no low-res pass and no posterize. Two bakes run once per map load, both lit by the map's sun + hemi light, so the runtime scene has no lights:
+
+- **Units:** HD PBR models (`src/render/hd/`, one file per tower/enemy, registered in full `Record`s so every id needs a model) are baked into a sprite atlas. Each tower level gets 16 turret yaws plus a base; each enemy gets 8 yaws × 4 walk phases.
+- **Terrain:** the HD map scene (`src/render/hd/terrain/`: heightfield, mask, procedural texture sets, props; spec `docs/terrain-hd.md`) is pre-rendered from the fixed 55° ortho view into one texture, at the screen's px/unit at zoom 30 (capped at 180). It is drawn as one camera-plane quad.
+
+Frame order:
+
+1. World (layer 0): the baked terrain quad (no depth), then one merged depth-only occluder of the static terrain meshes, then the live terrain pieces (pad lights, portal rings, core glow), hover/range/selection and ground decals.
+2. Unit sprites as painter-sorted billboards (`src/render/units.ts`, no depth test), then their opaque silhouettes into depth.
+3. Overlay (layer `OVERLAY_LAYER`): airborne FX and HP bars. These are depth-tested against cliffs, rocks and unit silhouettes, so an FX behind a mesa or a unit hides behind it.
+
+`src/render/view.ts` keeps a virtual ~384 px tall view grid only for camera sizing. Zoom steps are texels per unit on that grid, and the pan snaps to it, so baked terrain and sprite texels land on whole screen pixels and don't shimmer.
 
 The sim never sees real time, only step counts. Same seed + same command log = same result, which is what makes headless tests and balance runs possible.
 
