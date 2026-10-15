@@ -1,12 +1,15 @@
 // Orthographic steep-3/4 camera (art-direction §1): pitch 55°, no yaw, integer PPU zoom, texel-snapped pan.
 import * as THREE from 'three';
 
-const PITCH = THREE.MathUtils.degToRad(55);
+export const PITCH = THREE.MathUtils.degToRad(55);
 const SIN = Math.sin(PITCH);
 const COS = Math.cos(PITCH);
 const DIST = 60;
-const ZOOMS = [24, 32, 40] as const;
+// Low-res texels per world unit. The game opens at 30: a quarter closer than the old fit-the-whole-fight framing
+// (which landed on 24 on every map at 16:9), so units read at StarCraft-like size; the player pans to the spawns.
+const ZOOMS = [24, 30, 40] as const;
 const DEFAULT_ZOOM = 1;
+export const DEFAULT_PPU: number = ZOOMS[DEFAULT_ZOOM];
 const EDGE_PX = 12;
 const PAN_SPEED = 14; // units/s at PPU 32
 
@@ -17,8 +20,8 @@ export interface CameraRig {
   /** Low-res texels of screen covered by the bottom HUD; lets the last rows scroll above it. */
   setBottomInset(texels: number): void;
   /**
-   * Keep this world rect (x = col, z = row) in view above the bottom inset, zooming out if needed; `keep` (the core)
-   * wins when it can't all fit. Re-applied on resize/inset until the player pans or zooms.
+   * Centre this world rect (x = col, z = row) in the view above the bottom inset at the default zoom; `keep` (the
+   * core) stays in view when the rect doesn't fit. Re-applied on resize/inset until the player pans or zooms.
    */
   frame(rect: { x0: number; z0: number; x1: number; z1: number }, keep: { x: number; z: number }): void;
   update(dt: number): void;
@@ -57,11 +60,10 @@ export function createCameraRig(canvas: HTMLCanvasElement, cols: number, rows: n
     const viewW = (p: number): number => rtW / p;
     const viewD = (p: number): number => (rtH - inset) / (p * SIN); // world z rows visible above the console
     zoom = DEFAULT_ZOOM;
-    while (zoom > 0 && (r.x1 - r.x0 > viewW(ppu()) || r.z1 - r.z0 > viewD(ppu()))) zoom--;
     size();
     const p = ppu();
-    const w = viewW(p) / 2 - 0.5;
-    const d = viewD(p) / 2 - 0.5;
+    const w = viewW(p) / 2 - 1.5;
+    const d = viewD(p) / 2 - 1.5; // margin: the core model (~1.5 wide, 1.2 tall) must clear the edges and the console
     // centre the rect in the visible band, then pull back toward the core if the rect overflows
     const cx = clampRange((r.x0 + r.x1) / 2, keep.x - w, keep.x + w);
     const cz = clampRange((r.z0 + r.z1) / 2, keep.z - d, keep.z + d);

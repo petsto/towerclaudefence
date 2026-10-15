@@ -5,8 +5,10 @@ import * as THREE from 'three';
 import { ENEMIES } from '../data';
 import type { DamageType, EnemyId, MapDef, TowerId } from '../data/types';
 import type { GameState, SimEvent } from '../sim/types';
+import { bounds, enemyBuilt, TOWER_YAW, towerBuilt, towerFrame } from './hd';
 import type { Interp } from './interp';
-import { TOWER_RISE } from './models';
+import { OVERLAY_LAYER } from './pixel';
+import { PAD_Y, PATH_Y } from './terrain';
 
 export interface Fx {
   handle(events: readonly SimEvent[], state: GameState): void;
@@ -48,19 +50,36 @@ const DAMAGE_COLOR: Readonly<Record<DamageType, THREE.Color>> = {
   explosive: COL.orange,
   plasma: COL.violet,
 };
-const MUZZLE: Readonly<Record<TowerId, { h: number; fwd: number }>> = {
-  picket: { h: 0.55, fwd: 0.35 },
-  thumper: { h: 0.6, fwd: 0.3 },
-  stasis: { h: 0.65, fwd: 0.2 },
-  longshot: { h: 0.95, fwd: 0.4 },
-  breacher: { h: 0.6, fwd: 0.25 },
-  arc_coil: { h: 0.85, fwd: 0 },
+// FX anchor points come from the unit models themselves (same Built the sprite atlas bakes), so they follow
+// whatever size the HD models end up.
+const muzzles = new Map<string, { h: number; fwd: number }>();
+/** Turret's forward-most (+X) geometry = barrel tips, at yaw 0; arc_coil discharges from its crown. */
+function muzzleOf(id: TowerId, level: 1 | 2 | 3): { h: number; fwd: number } {
+  const key = `${id}:${level}`;
+  let m = muzzles.get(key);
+  if (m) return m;
+  const b = towerBuilt(id, level);
+  let fwd = 0, h = 0;
+  if (id === 'arc_coil') h = bounds([b]).h;
+  else {
+    const tur = b.parts.filter((p) => p.turret).map((p) => p.geo.attributes.position!);
+    for (const a of tur) for (let i = 0; i < a.count; i++) fwd = Math.max(fwd, a.getX(i));
+    let sum = 0, n = 0;
+    for (const a of tur) for (let i = 0; i < a.count; i++) if (a.getX(i) > fwd - 0.03) (sum += a.getY(i)), n++;
+    h = b.pivot + (n ? sum / n : 0);
+  }
+  muzzles.set(key, (m = { h: PAD_Y + h, fwd }));
+  return m;
+}
+const enemyDims = new Map<EnemyId, { r: number; h: number }>();
+const dims = (id: EnemyId): { r: number; h: number } => {
+  let d = enemyDims.get(id);
+  if (!d) enemyDims.set(id, (d = bounds([enemyBuilt(id, 0)])));
+  return d;
 };
-
+/** Where shots hit / deaths burst: ~60% up the model (flyers build their body high, so this follows them). */
 function enemyHeight(defId: EnemyId | undefined): number {
-  if (!defId) return 0.35;
-  const d = ENEMIES[defId];
-  return d.isBoss ? 0.7 : d.size === 'heavy' ? 0.5 : d.size === 'medium' ? 0.35 : 0.25;
+  return defId ? PATH_Y + dims(defId).h * 0.6 : 0.3;
 }
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
@@ -475,6 +494,8 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
     dust.object, rings.object, spheres.object, shards.object, glow.object, bolts.object,
   ];
   scene.add(...objects);
+  // airborne FX draw over the unit sprites; ground decals (splats, slow rings, shockwave rings) stay under them
+  for (const o of objects) if (o !== splatMesh && o !== slowMesh && o !== rings.object) o.layers.set(OVERLAY_LAYER);
 
   let state: GameState | null = null;
   const end = map.paths[0]!.at(-1)!; // every path ends on the core (data.test.ts)
@@ -506,10 +527,11 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
   }
   const mz = { x: 0, y: 0, z: 0 };
   function muzzle(t: { defId: TowerId; level: 1 | 2 | 3; col: number; row: number; rotation: number }): void {
-    const m = MUZZLE[t.defId];
-    mz.x = t.col + 0.5 + Math.cos(t.rotation) * m.fwd;
-    mz.y = m.h + TOWER_RISE[t.level];
-    mz.z = t.row + 0.5 + Math.sin(t.rotation) * m.fwd;
+    const m = muzzleOf(t.defId, t.level);
+    const yaw = (towerFrame(t.rotation) / TOWER_YAW) * Math.PI * 2; // the turret sprite's baked yaw
+    mz.x = t.col + 0.5 + Math.cos(yaw) * m.fwd;
+    mz.y = m.h;
+    mz.z = t.row + 0.5 + Math.sin(yaw) * m.fwd;
   }
 
   // -------- composite effects
@@ -582,7 +604,7 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
     const b2 = bolts.start(COL.cyan, null, 0.12, 0.2, 6, true);
     const t = findTower(ev.towerId);
     ev.points.forEach((p, i) => {
-      const h = i === 0 ? (t ? MUZZLE[t.defId].h + TOWER_RISE[t.level] : 0.85) : 0.35;
+      const h = i === 0 ? (t ? muzzleOf(t.defId, t.level).h : 0.85) : 0.35;
       bolts.point(b1, p.x, h, p.y);
       bolts.point(b2, p.x, h, p.y);
       if (i > 0) {
@@ -646,7 +668,7 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
         }
         case 'death': death(ev); break;
         case 'build':
-          spheres.spawn(ev.col + 0.5, 0.35, ev.row + 0.5, 0.15, 0.6, 0.22, COL.white, COL.teal, COL.blue); // construction flash
+          spheres.spawn(ev.col + 0.5, 0.35, ev.row + 0.5, 0.15, 0.6, 0.14, COL.white, COL.teal, COL.blue); // construction flash (short: it draws over the sprite's build pop)
           rings.spawn(ev.col + 0.5, 0.05, ev.row + 0.5, 0.2, 0.75, 0.45, COL.white, COL.teal, COL.blue);
           glow.burst(10, ev.col + 0.5, 0.1, ev.row + 0.5, 1.6, COL.teal, COL.amber, 0.08, 0.6, -1, 1);
           dust.burst(8, ev.col + 0.5, 0.08, ev.row + 0.5, 1.4, COL.dust, COL.dust, 0.2, 0.8, -0.3, 0.2, 2.5);
@@ -689,7 +711,7 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
       const pulse = 1 + Math.sin(time * 8) * 0.12;
       for (const e of state.enemies) {
         if (!e.slowed || n >= slowCap) continue;
-        const r = enemyHeight(e.defId) * 1.1 * pulse;
+        const r = (dims(e.defId).r + 0.05) * pulse;
         const at = interp.enemy(e);
         _m.compose(_p.set(at.x, 0.04, at.y), _q.identity(), _s.set(r, 1, r));
         slowMesh.setMatrixAt(n++, _m);

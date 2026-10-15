@@ -1,7 +1,7 @@
 // Dev-only renderer check: renders a map with a fake GameState. ?map=<id>, ?towers=all fills every pad.
 import { ENEMIES, MAP_LIST, MAPS, TOWER_LIST } from '../src/data';
-import type { EnemyId, MapId } from '../src/data/types';
-import { createRenderer } from '../src/render';
+import type { MapId } from '../src/data/types';
+import { createRenderer, mapEnemies } from '../src/render';
 import { buildPath, pointAt } from '../src/sim/path';
 import type { EnemyState, GameState, TowerState } from '../src/sim/types';
 
@@ -40,7 +40,7 @@ let towers: TowerState[] = towerPads.map(([col, row], i) => ({
 }));
 
 // Enemies marching along each path.
-const enemyIds = Object.keys(ENEMIES) as EnemyId[];
+const enemyIds = mapEnemies(map); // the atlas bakes only this map's enemies
 function enemiesAt(time: number): EnemyState[] {
   const out: EnemyState[] = [];
   let id = 1;
@@ -92,7 +92,7 @@ view.addEventListener('click', (e) => {
 });
 
 function frame(now: number): void {
-  const dt = Math.min(0.1, (now - last) / 1000);
+  const dt = Math.min(0.1, Math.max(0, (now - last) / 1000)); // first rAF stamp can precede `last`
   last = now;
   time += dt;
   fps += (1 / Math.max(dt, 1e-3) - fps) * 0.05;

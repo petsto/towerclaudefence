@@ -4,7 +4,8 @@
 // in one instanced draw call (premultiplied alpha, no depth test).
 //
 // Frames per entry: tower = TOWER_YAW turret frames (turret at yaw f/TOWER_YAW·2π, shadowing the base only) + one
-// static base frame (TOWER_BASE); draw base then turret at the same anchor. Enemy = WALK × ENEMY_YAW frames, see
+// static base frame (TOWER_BASE); draw base then turret at the same anchor. A tower without turret parts gets only the
+// base frame (Atlas.turret(key) = false). Enemy = WALK × ENEMY_YAW frames, see
 // enemyFrame. Cells are sized per entry from the model's bounds + its shadow, so small units cost little.
 import * as THREE from 'three';
 import type { Built, MatId } from './kit';
@@ -40,16 +41,22 @@ export interface Atlas {
   quad(key: string): Rect;
   /** Atlas uv rect (x, y, w, h) of one frame. */
   uv(key: string, frame: number): Rect;
+  /** Model bounds in world units: max horizontal radius and height above the anchor (HP bars, FX heights). */
+  bounds(key: string): { r: number; h: number };
+  /** Tower has turret frames (0..TOWER_YAW-1); false = base frame only. */
+  turret(key: string): boolean;
   ms: number;
   bytes: number;
   size: string;
   dispose(): void;
 }
 
-interface Cell { quad: Rect; wPx: number; hPx: number; frames: number; uv: Rect[]; r: number; h: number }
+/** `frames`: the frame indices this cell holds (uv is indexed by frame, so it may be sparse). */
+interface Cell { quad: Rect; wPx: number; hPx: number; frames: number[]; uv: Rect[]; r: number; h: number; turret: boolean }
+const TURRET_SHADOW = 0.32; // turret shadow on its own base: the catcher's 0.6 reads as a black disc on the slewing ring
 
 /** Max horizontal radius (any yaw) and height over all builds. */
-function bounds(builds: Built[]): { r: number; h: number } {
+export function bounds(builds: Built[]): { r: number; h: number } {
   let r = 0, h = 0;
   for (const b of builds) for (const p of b.parts) {
     const pos = p.geo.attributes.position!;
@@ -74,8 +81,10 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
     const b = -(r + Math.max(0, sz * h)) * SIN - MARGIN;
     const t = Math.max(h * COS + r * SIN, (r - Math.min(0, sz * h)) * SIN) + MARGIN;
     const wPx = Math.ceil((right - l) * pxPerUnit), hPx = Math.ceil((t - b) * pxPerUnit);
-    const frames = e.tower ? TOWER_YAW + 1 : ENEMY_YAW * e.builds.length;
-    cells.set(e.key, { quad: [l, b, wPx / pxPerUnit, hPx / pxPerUnit], wPx, hPx, frames, uv: [], r, h });
+    const turret = e.tower && e.builds.some((bu) => bu.parts.some((p) => p.turret));
+    const frames = [...Array(e.tower ? (turret ? TOWER_YAW + 1 : 0) : ENEMY_YAW * e.builds.length).keys()];
+    if (e.tower && !turret) frames.push(TOWER_BASE);
+    cells.set(e.key, { quad: [l, b, wPx / pxPerUnit, hPx / pxPerUnit], wPx, hPx, frames, uv: [], r, h, turret });
   }
   const maxTex = gl.capabilities.maxTextureSize;
   let AW = Math.min(MAX_W, maxTex);
@@ -85,7 +94,7 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
   for (const e of order) {
     const c = cells.get(e.key)!;
     const at: [number, number][] = [];
-    for (let f = 0; f < c.frames; f++) {
+    for (let f = 0; f < c.frames.length; f++) {
       if (x + c.wPx > AW) [x, y, shelf] = [0, y + shelf, 0];
       at.push([x, y]);
       x += c.wPx;
@@ -98,7 +107,7 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
   if (AH > maxTex) throw new Error(`sprite atlas ${AW}x${AH} exceeds max texture size ${maxTex}: lower pxPerUnit or bake fewer entries`);
   order.forEach((e, i) => {
     const c = cells.get(e.key)!;
-    c.uv = px[i]!.map(([cx, cy]) => [cx / AW, cy / AH, c.wPx / AW, c.hPx / AH] as const);
+    px[i]!.forEach(([cx, cy], k) => (c.uv[c.frames[k]!] = [cx / AW, cy / AH, c.wPx / AW, c.hPx / AH]));
   });
 
   // --- bake rig ---
@@ -113,6 +122,7 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
   sun.shadow.radius = 2;
   scene.add(sun, new THREE.HemisphereLight(L.sky, L.ground, L.hemiI));
   const catcher = new THREE.ShadowMaterial({ opacity: 0.6 });
+  const baseCatcher = new THREE.ShadowMaterial({ opacity: TURRET_SHADOW });
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), catcher);
   ground.receiveShadow = true;
   scene.add(ground);
@@ -169,11 +179,15 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
       if (e.tower) {
         turret.visible = false;
         shoot(TOWER_BASE);
+        if (!c.turret) {
+          scene.remove(root);
+          return;
+        }
         // turret frames: the base only catches the turret's shadow (and occludes); the base sprite draws it
         turret.visible = true;
         ground.visible = false;
         for (const m of baseMeshes) {
-          m.material = catcher;
+          m.material = baseCatcher;
           m.castShadow = false;
         }
         for (let f = 0; f < TOWER_YAW; f++) {
@@ -198,12 +212,20 @@ export function bakeAtlas(gl: THREE.WebGLRenderer, entries: BakeEntry[], mats: R
   down.dispose();
   ground.geometry.dispose();
   catcher.dispose();
+  baseCatcher.dispose();
   sun.shadow.map?.dispose();
 
+  const cell = (key: string): Cell => {
+    const c = cells.get(key);
+    if (!c) throw new Error(`sprite atlas has no entry '${key}' (baked: towers + this map's enemies)`);
+    return c;
+  };
   return {
     texture: atlas.texture,
-    quad: (key) => cells.get(key)!.quad,
-    uv: (key, frame) => cells.get(key)!.uv[frame]!,
+    quad: (key) => cell(key).quad,
+    uv: (key, frame) => cell(key).uv[frame]!,
+    bounds: (key) => cell(key),
+    turret: (key) => cell(key).turret,
     ms: performance.now() - t0,
     bytes: AW * AH * 4,
     size: `${AW}x${AH}`,
@@ -226,33 +248,51 @@ export function builtToGroup(b: Built, mats: Record<MatId, THREE.Material>): THR
   return root;
 }
 
-/** One sprite to draw: anchor (x, y, z) in world space; lower `order` draws first at equal z (tower base: 0, turret: 1). */
-export interface SpriteItem { x: number; y: number; z: number; key: string; frame: number; order: number }
+/**
+ * One sprite to draw: anchor (x, y, z) in world space; lower `order` draws first at equal z (tower base: 0, turret: 1).
+ * Optional effects, 0..1: `flash` white hit flash, `slow` cyan tint, `shield` shimmer; `scale` about the anchor
+ * (build/sell pop), `alpha` fade. Tints skip the baked ground shadow (alpha <= the catcher's 0.6).
+ */
+export interface SpriteItem {
+  x: number; y: number; z: number; key: string; frame: number; order: number;
+  scale?: number; alpha?: number; flash?: number; slow?: number; shield?: number;
+}
 
-export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.InstancedMesh; set(list: SpriteItem[]): void } {
+export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.InstancedMesh; set(list: SpriteItem[], time?: number): void } {
   const geo = new THREE.PlaneGeometry(1, 1); // only its uv (0..1) is used
-  const aUv = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage);
-  const aQuad = new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage);
+  const attr = (): THREE.InstancedBufferAttribute => new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage);
+  const aUv = attr(), aQuad = attr(), aFx = attr();
   geo.setAttribute('aUv', aUv);
   geo.setAttribute('aQuad', aQuad);
+  geo.setAttribute('aFx', aFx);
+  const time = { value: 0 };
   const mat = new THREE.ShaderMaterial({
-    uniforms: { atlas: { value: atlas.texture } },
+    uniforms: { atlas: { value: atlas.texture }, time },
     defines: { SIN_P: SIN.toFixed(6), COS_P: COS.toFixed(6) },
     vertexShader: /* glsl */ `
-      attribute vec4 aUv; attribute vec4 aQuad; varying vec2 vUv;
+      attribute vec4 aUv; attribute vec4 aQuad; attribute vec4 aFx; varying vec2 vUv; varying vec2 vQ; varying vec4 vFx;
       void main() {
         vUv = aUv.xy + uv * aUv.zw;
         vec2 q = aQuad.xy + uv * aQuad.zw; // camera-plane offset from the anchor
+        vQ = q;
+        vFx = aFx;
         gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(q.x, q.y * COS_P, -q.y * SIN_P, 1.0);
       }`,
     fragmentShader: /* glsl */ `
-      uniform sampler2D atlas; varying vec2 vUv;
+      uniform sampler2D atlas; uniform float time; varying vec2 vUv; varying vec2 vQ; varying vec4 vFx; // flash, slow, shield, alpha
       void main() {
         vec4 c = texture2D(atlas, vUv);
         if (c.a < 0.004) discard;
-        gl_FragColor = vec4(c.rgb / c.a, c.a); // un-premultiply for the output transform, then back
+        vec3 rgb = c.rgb / c.a;
+        float body = smoothstep(0.62, 0.9, c.a); // the baked ground shadow stays untinted
+        rgb = mix(rgb, rgb * vec3(0.45, 0.95, 1.5) + vec3(0.0, 0.03, 0.06), vFx.y * body);
+        float band = pow(0.5 + 0.5 * sin(vQ.y * 18.0 - vQ.x * 6.0 - time * 7.0), 6.0);
+        rgb += vec3(0.2, 0.5, 1.0) * vFx.z * body * (0.12 + 0.5 * band);
+        rgb = mix(rgb, vec3(1.0), vFx.x * body * 0.85);
+        gl_FragColor = vec4(rgb, c.a); // un-premultiplied for the output transform, then back
         #include <colorspace_fragment>
         gl_FragColor.rgb *= gl_FragColor.a;
+        gl_FragColor *= vFx.w;
       }`,
     transparent: true, depthTest: false, depthWrite: false,
     blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
@@ -264,18 +304,21 @@ export function createSprites(atlas: Atlas, cap: number): { mesh: THREE.Instance
   const m4 = new THREE.Matrix4();
   return {
     mesh,
-    set(list) {
+    set(list, t = 0) {
+      time.value = t;
       list.sort((a, b) => a.z - b.z || a.order - b.order); // painter's order: farther rows first, base under turret
       const n = Math.min(list.length, cap);
       for (let i = 0; i < n; i++) {
         const s = list[i]!;
-        mesh.setMatrixAt(i, m4.makeTranslation(s.x, s.y, s.z));
+        const k = s.scale ?? 1;
+        mesh.setMatrixAt(i, m4.makeScale(k, k, k).setPosition(s.x, s.y, s.z));
         aUv.setXYZW(i, ...atlas.uv(s.key, s.frame));
         aQuad.setXYZW(i, ...atlas.quad(s.key));
+        aFx.setXYZW(i, s.flash ?? 0, s.slow ?? 0, s.shield ?? 0, s.alpha ?? 1);
       }
       mesh.count = n;
       mesh.instanceMatrix.needsUpdate = true;
-      aUv.needsUpdate = aQuad.needsUpdate = true;
+      aUv.needsUpdate = aQuad.needsUpdate = aFx.needsUpdate = true;
     },
   };
 }

@@ -193,7 +193,8 @@ function draw(dt: number): void {
       else if (!STILL) yaw += time * 0.8;
       const y = terrain.topAt(Math.floor(x), Math.floor(z));
       const key = towerKey(s.tower, s.level!);
-      list.push({ x, y, z, key, frame: TOWER_BASE, order: 0 }, { x, y, z, key, frame: towerFrame(yaw), order: 1 });
+      list.push({ x, y, z, key, frame: TOWER_BASE, order: 0 });
+      if (atlas.turret(key)) list.push({ x, y, z, key, frame: towerFrame(yaw), order: 1 });
     } else {
       if (GRID) {
         // walk a small circle: every heading, walk phase from distance

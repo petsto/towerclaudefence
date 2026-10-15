@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { Biome, MapDef, Tile } from '../data/types';
+import { box as pbox, cyl, merge } from './models/parts';
 
 export const PATH_Y = -0.08;
 export const PAD_Y = 0.06;
@@ -39,19 +40,6 @@ function seedOf(id: string): number {
   let h = 7;
   for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
   return h;
-}
-
-/** Bakes a flat vertex colour into a primitive (for merged, vertex-coloured models). */
-export function paint(geo: THREE.BufferGeometry, hex: string | THREE.Color): THREE.BufferGeometry {
-  const c = new THREE.Color(hex);
-  const n = geo.attributes.position!.count;
-  const arr = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) c.toArray(arr, i * 3);
-  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
-  return geo;
-}
-function part(geo: THREE.BufferGeometry, hex: string, x: number, y: number, z: number, ry = 0): THREE.BufferGeometry {
-  return paint(geo.rotateY(ry).translate(x, y, z), hex);
 }
 
 interface Inst {
@@ -126,22 +114,38 @@ export function createTerrain(map: MapDef): Terrain {
     }
   };
 
-  // --- tile boxes: 2x2 sub-tiles per tile, one InstancedMesh for the whole map ---------------
+  // --- one pass over the grid collects every instance; meshes are built per kind below ---------
   const ground = new THREE.Color(p.ground);
   const groundAlt = new THREE.Color(p.groundAlt);
   const pathC = new THREE.Color(p.path);
   const cliff = new THREE.Color(p.cliff);
   const pad = new THREE.Color(p.buildPad);
-  const boxes: Inst[] = [];
+  const accentDim = new THREE.Color(p.accent).multiplyScalar(0.6);
   const jitter = (c: THREE.Color, k: number, amt: number): THREE.Color => c.clone().multiplyScalar(1 + (k - 0.5) * 2 * amt);
   const groundColor = (x: number, z: number, k: number): THREE.Color => {
     const n = noise(x * 0.3, z * 0.3, seed) * 0.7 + noise(x * 0.9, z * 0.9, seed + 1) * 0.3;
     const t = THREE.MathUtils.smoothstep(n, 0.45, 0.72) * 0.85;
     return jitter(ground.clone().lerp(groundAlt, t), k, 0.07);
   };
+  const boxes: Inst[] = []; // tile boxes: 2x2 sub-tiles per tile, one InstancedMesh for the whole map
   const box = (x: number, z: number, w: number, top: number, color: THREE.Color): void => {
     boxes.push({ m: mat(x, top, z, w, top + SKIRT, w), c: color });
   };
+  const padKeys: string[] = [];
+  const frames: Inst[] = [];
+  const rocks: Inst[] = [];
+  const shards: Inst[] = [];
+  const wrecks: Inst[] = [];
+  const cracks: Inst[] = [];
+  const rockC = new THREE.Color(style.rock);
+  const shardC = new THREE.Color(style.shard);
+  const wreckC = [new THREE.Color('#2e3540'), new THREE.Color('#4a3a30'), new THREE.Color('#3d4a58')];
+  const crackC = style.crack ? new THREE.Color(style.crack) : null;
+  let n = 0;
+  const rnd = (): number => hash(n++, 17, seed + 9);
+  const count = (avg: number): number => Math.floor(avg + rnd());
+  const spawns: THREE.Vector3[] = [];
+  const cores: THREE.Vector3[] = [];
 
   for (let r = 0; r < map.rows; r++) {
     for (let c = 0; c < map.cols; c++) {
@@ -162,64 +166,11 @@ export function createTerrain(map: MapDef): Terrain {
           }
         }
       }
-      if (tile === 'build') box(c + 0.5, r + 0.5, 0.86, PAD_Y, jitter(pad, hash(c, r, seed + 4), 0.04));
-    }
-  }
-  const boxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, -0.5, 0);
-  const lambert = new THREE.MeshLambertMaterial({ flatShading: true });
-  group.add(instanced(boxGeo, lambert, boxes, true));
-  disposables.push(boxGeo, lambert);
-
-  // --- build pad frames (glowing edge) --------------------------------------------------------
-  const frameParts: THREE.BufferGeometry[] = [];
-  const F = 0.43;
-  const T = 0.045;
-  for (const [w, d, x, z] of [
-    [2 * F, T, 0, -F + T / 2],
-    [2 * F, T, 0, F - T / 2],
-    [T, 2 * F, -F + T / 2, 0],
-    [T, 2 * F, F - T / 2, 0],
-  ] as const) {
-    frameParts.push(new THREE.BoxGeometry(w, 0.03, d).translate(x, 0.015, z));
-  }
-  // corner studs make the frame read at low zoom
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) frameParts.push(new THREE.BoxGeometry(0.1, 0.04, 0.1).translate(sx * (F - 0.05), 0.02, sz * (F - 0.05)));
-  const frameGeo = mergeGeometries(frameParts.map((g) => g.toNonIndexed()));
-  frameParts.forEach((g) => g.dispose());
-  const frameMat = new THREE.MeshBasicMaterial();
-  const accentDim = new THREE.Color(p.accent).multiplyScalar(0.6);
-  const padKeys: string[] = [];
-  const frames: Inst[] = [];
-  for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) {
-      if (tileAt(c, r) !== 'build') continue;
-      padKeys.push(`${c},${r}`);
-      frames.push({ m: mat(c + 0.5, PAD_Y, r + 0.5, 1, 1, 1), c: accentDim });
-    }
-  }
-  const frameMesh = instanced(frameGeo, frameMat, frames, false);
-  frameMesh.receiveShadow = false;
-  group.add(frameMesh);
-  disposables.push(frameGeo, frameMat);
-  let occupied: boolean[] = padKeys.map(() => false);
-
-  // --- decor props --------------------------------------------------------------------------
-  const rocks: Inst[] = [];
-  const shards: Inst[] = [];
-  const wrecks: Inst[] = [];
-  const cracks: Inst[] = [];
-  const rockC = new THREE.Color(style.rock);
-  const shardC = new THREE.Color(style.shard);
-  const wreckC = [new THREE.Color('#2e3540'), new THREE.Color('#4a3a30'), new THREE.Color('#3d4a58')];
-  const crackC = style.crack ? new THREE.Color(style.crack) : null;
-  let n = 0;
-  const rnd = (): number => hash(n++, 17, seed + 9);
-  const count = (avg: number): number => Math.floor(avg + rnd());
-
-  for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) {
-      const tile = tileAt(c, r);
-      if (tile === 'decor') {
+      if (tile === 'build') {
+        box(c + 0.5, r + 0.5, 0.86, PAD_Y, jitter(pad, hash(c, r, seed + 4), 0.04));
+        padKeys.push(`${c},${r}`);
+        frames.push({ m: mat(c + 0.5, PAD_Y, r + 0.5, 1, 1, 1), c: accentDim });
+      } else if (tile === 'decor') {
         const top = plateauTop(c, r) - 0.03;
         for (let i = count(style.rocksPerObstacle); i > 0; i--) {
           const s = 0.7 + rnd() * 0.9;
@@ -257,10 +208,40 @@ export function createTerrain(map: MapDef): Terrain {
             cracks.push({ m: mat(c + 0.2 + rnd() * 0.6, 0.012, r + 0.2 + rnd() * 0.6, 0.5 + rnd() * 1.2, 1, 1, 0, rnd() * 3.14), c: jitter(crackC, rnd(), 0.2) });
           }
         }
-      }
+      } else if (tile === 'spawn') spawns.push(new THREE.Vector3(c + 0.5, PATH_Y, r + 0.5));
+      else if (tile === 'core') cores.push(new THREE.Vector3(c + 0.5, PATH_Y, r + 0.5));
     }
   }
 
+  const boxGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, -0.5, 0);
+  const lambert = new THREE.MeshLambertMaterial({ flatShading: true });
+  group.add(instanced(boxGeo, lambert, boxes, true));
+  disposables.push(boxGeo, lambert);
+
+  // --- build pad frames (glowing edge) --------------------------------------------------------
+  const frameParts: THREE.BufferGeometry[] = [];
+  const F = 0.43;
+  const T = 0.045;
+  for (const [w, d, x, z] of [
+    [2 * F, T, 0, -F + T / 2],
+    [2 * F, T, 0, F - T / 2],
+    [T, 2 * F, -F + T / 2, 0],
+    [T, 2 * F, F - T / 2, 0],
+  ] as const) {
+    frameParts.push(new THREE.BoxGeometry(w, 0.03, d).translate(x, 0.015, z));
+  }
+  // corner studs make the frame read at low zoom
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) frameParts.push(new THREE.BoxGeometry(0.1, 0.04, 0.1).translate(sx * (F - 0.05), 0.02, sz * (F - 0.05)));
+  const frameGeo = mergeGeometries(frameParts.map((g) => g.toNonIndexed()));
+  frameParts.forEach((g) => g.dispose());
+  const frameMat = new THREE.MeshBasicMaterial();
+  const frameMesh = instanced(frameGeo, frameMat, frames, false);
+  frameMesh.receiveShadow = false;
+  group.add(frameMesh);
+  disposables.push(frameGeo, frameMat);
+  let occupied: boolean[] = padKeys.map(() => false);
+
+  // --- decor props --------------------------------------------------------------------------
   const rockGeo = new THREE.IcosahedronGeometry(0.2, 0).translate(0, 0.08, 0);
   const shardGeo = new THREE.ConeGeometry(0.09, 0.5, 5).translate(0, 0.22, 0);
   const wreckGeo = mergeGeometries([
@@ -283,81 +264,75 @@ export function createTerrain(map: MapDef): Terrain {
   const ringMat = new THREE.MeshBasicMaterial({ color: '#ff2a4a' });
   const holeGeo = new THREE.CircleGeometry(0.27, 12).rotateX(-Math.PI / 2);
   const holeMat = new THREE.MeshBasicMaterial({ color: '#1a0410' });
-  const spikeParts: THREE.BufferGeometry[] = [];
+  const spikes: THREE.BufferGeometry[] = [];
+  const tip = new THREE.Vector3();
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + 0.3;
     const h = 0.32 + (i % 2) * 0.16;
-    const g = new THREE.ConeGeometry(0.06, h, 5).translate(0, h / 2, 0).rotateZ(-0.45).rotateY(-a);
-    spikeParts.push(part(g.toNonIndexed(), i % 2 ? '#c8b89a' : '#6a3a6e', Math.cos(a) * 0.44, 0, Math.sin(a) * 0.44));
+    const e = new THREE.Euler(0, -a, -0.45); // lean outward, then face the spike's angle
+    tip.set(0, h / 2, 0).applyEuler(e); // cones grow from their base on the ring
+    spikes.push(cyl(0, 0.06, h, 5, i % 2 ? 0xc8b89a : 0x6a3a6e, { p: [Math.cos(a) * 0.44 + tip.x, tip.y, Math.sin(a) * 0.44 + tip.z], r: [e.x, e.y, e.z] }));
   }
-  const spikeGeo = mergeGeometries(spikeParts);
-  spikeParts.forEach((g) => g.dispose());
+  const spikeGeo = merge(spikes);
   const vcLambert = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   disposables.push(ringGeo, ringMat, holeGeo, holeMat, spikeGeo, vcLambert);
-  for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) {
-      if (tileAt(c, r) !== 'spawn') continue;
-      const g = new THREE.Group();
-      g.position.set(c + 0.5, PATH_Y, r + 0.5);
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.position.y = 0.012;
-      const hole = new THREE.Mesh(holeGeo, holeMat);
-      hole.position.y = 0.006;
-      const spikes = new THREE.Mesh(spikeGeo, vcLambert);
-      spikes.castShadow = true;
-      g.add(hole, ring, spikes);
-      group.add(g);
-      portalRings.push(ring);
-    }
+  for (const at of spawns) {
+    const g = new THREE.Group();
+    g.position.copy(at);
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.y = 0.012;
+    const hole = new THREE.Mesh(holeGeo, holeMat);
+    hole.position.y = 0.006;
+    const spikeMesh = new THREE.Mesh(spikeGeo, vcLambert);
+    spikeMesh.castShadow = true;
+    g.add(hole, ring, spikeMesh);
+    group.add(g);
+    portalRings.push(ring);
   }
 
   // --- colony core (team structure, glow in palette.core) -----------------------------------
-  const steel = '#4a6f9a';
-  const steelLight = '#6b8cb0';
-  const gun = '#2e3540';
-  const coreBody = mergeGeometries(
-    [
-      part(new THREE.CylinderGeometry(0.72, 0.78, 0.12, 8), gun, 0, 0.06, 0, Math.PI / 8),
-      part(new THREE.CylinderGeometry(0.5, 0.58, 0.3, 8), steel, 0, 0.27, 0, Math.PI / 8),
-      part(new THREE.BoxGeometry(0.78, 0.2, 0.56), '#3d5a7d', 0, 0.5, 0.02),
-      part(new THREE.CylinderGeometry(0.2, 0.3, 0.2, 8), steelLight, -0.05, 0.7, 0.0, Math.PI / 8),
-      part(new THREE.BoxGeometry(0.26, 0.24, 0.34), gun, 0.56, 0.2, 0.08),
-      part(new THREE.BoxGeometry(0.26, 0.24, 0.34), gun, -0.56, 0.2, 0.08),
-      part(new THREE.BoxGeometry(0.28, 0.05, 0.36), steel, 0.56, 0.34, 0.08),
-      part(new THREE.BoxGeometry(0.28, 0.05, 0.36), steel, -0.56, 0.34, 0.08),
-      part(new THREE.CylinderGeometry(0.025, 0.035, 0.6, 4), gun, 0.26, 0.9, -0.18),
-      part(new THREE.ConeGeometry(0.16, 0.06, 6).rotateX(0.5), steelLight, 0.26, 1.18, -0.18),
-      part(new THREE.BoxGeometry(0.1, 0.18, 0.1), gun, 0.0, 0.69, 0.3),
-    ].map((g) => g.toNonIndexed()),
-  );
-  const glow = p.core;
+  const steel = 0x4a6f9a;
+  const steelLight = 0x6b8cb0;
+  const gun = 0x2e3540;
+  const R8 = { r: [0, Math.PI / 8, 0] as const };
+  const coreBody = merge([
+    cyl(0.72, 0.78, 0.12, 8, gun, { p: [0, 0.06, 0], ...R8 }),
+    cyl(0.5, 0.58, 0.3, 8, steel, { p: [0, 0.27, 0], ...R8 }),
+    pbox(0.78, 0.2, 0.56, 0x3d5a7d, { p: [0, 0.5, 0.02] }),
+    cyl(0.2, 0.3, 0.2, 8, steelLight, { p: [-0.05, 0.7, 0.0], ...R8 }),
+    pbox(0.26, 0.24, 0.34, gun, { p: [0.56, 0.2, 0.08] }),
+    pbox(0.26, 0.24, 0.34, gun, { p: [-0.56, 0.2, 0.08] }),
+    pbox(0.28, 0.05, 0.36, steel, { p: [0.56, 0.34, 0.08] }),
+    pbox(0.28, 0.05, 0.36, steel, { p: [-0.56, 0.34, 0.08] }),
+    cyl(0.025, 0.035, 0.6, 4, gun, { p: [0.26, 0.9, -0.18] }),
+    cyl(0, 0.16, 0.06, 6, steelLight, { p: [0.26, 1.18, -0.18], r: [0.5, 0, 0] }),
+    pbox(0.1, 0.18, 0.1, gun, { p: [0.0, 0.69, 0.3] }),
+  ]);
+  const glow = new THREE.Color(p.core).getHex();
   const glowParts = [
-    part(new THREE.BoxGeometry(0.8, 0.035, 0.58), glow, 0, 0.44, 0.02),
-    part(new THREE.CylinderGeometry(0.09, 0.09, 0.05, 6), glow, -0.05, 0.82, 0),
-    part(new THREE.BoxGeometry(0.06, 0.06, 0.06), '#ffb030', 0.26, 1.22, -0.18),
-    part(new THREE.BoxGeometry(0.2, 0.03, 0.02), glow, 0.56, 0.22, 0.26),
-    part(new THREE.BoxGeometry(0.2, 0.03, 0.02), glow, -0.56, 0.22, 0.26),
+    pbox(0.8, 0.035, 0.58, glow, { p: [0, 0.44, 0.02] }),
+    cyl(0.09, 0.09, 0.05, 6, glow, { p: [-0.05, 0.82, 0] }),
+    pbox(0.06, 0.06, 0.06, 0xffb030, { p: [0.26, 1.22, -0.18] }),
+    pbox(0.2, 0.03, 0.02, glow, { p: [0.56, 0.22, 0.26] }),
+    pbox(0.2, 0.03, 0.02, glow, { p: [-0.56, 0.22, 0.26] }),
   ];
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
-    glowParts.push(part(new THREE.BoxGeometry(0.07, 0.03, 0.07), glow, Math.cos(a) * 0.68, 0.13, Math.sin(a) * 0.68));
+    glowParts.push(pbox(0.07, 0.03, 0.07, glow, { p: [Math.cos(a) * 0.68, 0.13, Math.sin(a) * 0.68] }));
   }
-  const coreGlow = mergeGeometries(glowParts.map((g) => g.toNonIndexed()));
+  const coreGlow = merge(glowParts);
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   disposables.push(coreBody, coreGlow, glowMat);
   let coreLight: THREE.Mesh | null = null;
-  for (let r = 0; r < map.rows; r++) {
-    for (let c = 0; c < map.cols; c++) {
-      if (tileAt(c, r) !== 'core') continue;
-      const g = new THREE.Group();
-      g.position.set(c + 0.5, PATH_Y, r + 0.5);
-      const body = new THREE.Mesh(coreBody, vcLambert);
-      body.castShadow = true;
-      body.receiveShadow = true;
-      coreLight = new THREE.Mesh(coreGlow, glowMat);
-      g.add(body, coreLight);
-      group.add(g);
-    }
+  for (const at of cores) {
+    const g = new THREE.Group();
+    g.position.copy(at);
+    const body = new THREE.Mesh(coreBody, vcLambert);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    coreLight = new THREE.Mesh(coreGlow, glowMat);
+    g.add(body, coreLight);
+    group.add(g);
   }
 
   return {
