@@ -188,3 +188,54 @@ export interface DifficultyDef {
   readonly startCashMult: number;
   readonly lives: number;
 }
+
+// ---- Command powers (GDD §14): free, infinite, gated only by charge time ----
+
+export type PowerId = 'tremor_mines' | 'lance_strike';
+
+interface PowerBase {
+  readonly id: PowerId;
+  readonly name: string;
+  readonly description: string;
+  /** Keyboard key that arms the power's targeting mode. */
+  readonly hotkey: string;
+  /** Sim seconds to gain one charge. Charging starts when wave 1 launches and holds while charges are full. */
+  readonly chargeTime: number;
+  /** Charges that can be stored. */
+  readonly maxCharges: number;
+}
+
+/** Plants one mine on a free path tile; the first enemy to touch it opens a slow field. */
+export interface MinePowerDef extends PowerBase {
+  readonly kind: 'mine';
+  /** Tiles, mine center to enemy center. Any enemy triggers it (slow-immune ones too). */
+  readonly triggerRadius: number;
+  /** Tiles, around the mine's tile center. */
+  readonly fieldRadius: number;
+  /** Seconds the field lasts after triggering. */
+  readonly fieldDuration: number;
+  /** Fraction 0..1 of speed removed; same rules as tower slow (strongest wins, bosses x BOSS_SLOW_FACTOR). */
+  readonly slow: number;
+  /** Slow duration (re)applied every step inside the field, so it lingers this long after leaving. */
+  readonly slowLinger: number;
+}
+
+/** Orbital beam on a tile: telegraph, then `pulses` damage pulses over everything within `radius`. */
+export interface StrikePowerDef extends PowerBase {
+  readonly kind: 'strike';
+  /** Tiles, around the target tile center. */
+  readonly radius: number;
+  /** Seconds from use to the first pulse (reticle on the ground, no damage). */
+  readonly telegraph: number;
+  readonly pulses: number;
+  /** Seconds between pulses; the first fires at impact, the beam lasts pulses x pulseInterval. */
+  readonly pulseInterval: number;
+  /** Per pulse per enemy, before scaling by MapDef.hpGrowth^waveIndex (0-based, min 0). */
+  readonly pulseDamage: number;
+  readonly damageType: DamageType;
+  readonly shieldMult: number;
+  /** Bosses instead take this fraction of (maxHp + maxShield) per full strike, split evenly over pulses. */
+  readonly bossFraction: number;
+}
+
+export type PowerDef = MinePowerDef | StrikePowerDef;

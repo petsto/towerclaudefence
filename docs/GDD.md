@@ -202,6 +202,7 @@ Key bindings: `README.md`. Towers use number keys `1`–`6` so WASD stays free f
 | Longshot 225 cr, 40 dmg, range 5.5 (was mono-spam optimal on Dust Ridge); Picket L2/L3 trimmed; Thumper faster; Breacher/Arc +0.5 range | Balance pass |
 | Clear bonus 30 + 6w, starting cash +100; Elite/Brutal softened so Recruit→Veteran→Elite→Brutal is a ramp, not a cliff | Balance pass |
 | Picket upgrades raise fire rate as well as damage; Thumper L2/L3 fire 2/3 shells (16 dmg each): extras hit the next-best targets in range, else land 0.4 tiles around the primary | Balance pass |
+| Command powers (§14): Tremor Mines (Q, 30 s, 3 stored, 60% slow field) and Lance Strike (E, 120 s, 6 Plasma pulses, 20% of a boss). Charging starts at wave 1 launch, not map load (no build-phase banking). Lance damage scales with `g_map`, bosses take a fixed fraction instead (mid and final alike). No difficulty modifier. | Product/game design |
 
 ## 13. Balance
 
@@ -210,7 +211,7 @@ Headless bots (`src/sim/autoplay.ts`) play every map × difficulty; `npm run bal
 - **naive**: fixed build order on the max-coverage pad, alternates build/upgrade from 6 towers.
 - **competent**: looks 3 waves ahead; per wave group estimates kill ratio *r* = damage the defense deals while the group walks past ÷ group effective HP (armor, size, shields, splash/chain, regen, overkill), expects `stake × e^(−r/2)` lives to leak and buys the build/upgrade that most reduces the sum of squared expected leaks per credit. Mixes towers and prepares for bosses without hard-coded rules. `competentStrategy(['picket'])` etc. gives the mono-tower variants.
 
-Targets (check against `npm run balance`):
+Both bots use the command powers via `withPowers` (§14); one extra block runs the competent bot without them to show what the powers are worth. Targets (check against `npm run balance`, with powers):
 
 - **Recruit:** comfortable everywhere; the naive bot wins it.
 - **Veteran:** the competent bot wins maps 1–2; Hollow Spire's twin-boss final is the wall.
@@ -219,3 +220,57 @@ Targets (check against `npm run balance`):
 - **Mixing matters:** no single-tower build (`competentStrategy(['picket'])` etc.) beats the mixed bot; mono builds lose Cinder Forge and Hollow Spire on Veteran; Stasis alone never gets past W2.
 
 Known gap: on Brutal, Cinder Forge lasts longer than Dust Ridge (Dust's long single path gives the Choir Mother more births at the W8 mid boss).
+
+## 14. Command powers (`src/data/powers.ts`)
+
+Two orbital-support powers, free and unlimited, gated only by charge. They help a defense through a spike; towers still do the work.
+
+**Charge** (both): sim time only (stops while paused, scales with game speed). Starts at **0 when wave 1 launches** (BEGIN ASSAULT), so idling in the build phase banks nothing. Charges between waves too; calling early trades charge time for credits. Recharging starts the moment a charge is spent; it holds at 0 while charges are full. No difficulty modifier: harder difficulties weaken the Lance only through enemy HP (`hpMult`, `growthAdd`).
+
+| Hotkey | Power | Charge | Stored | Target | Effect |
+|---|---|---|---|---|---|
+| Q | Tremor Mines | 30 s | 3 | free path tile (not spawn/core, one mine per tile) | Armed mine waits, no expiry and no field cap. First enemy within 0.5 opens a slow field: radius 1.5, 8 s, **slow 60%** (lingers 0.5 s after leaving). No damage. |
+| E | Lance Strike | 120 s | 1 | any tile | 1.5 s telegraph (reticle, no damage), then a 3 s beam: **6 pulses** 0.5 s apart on every enemy within 1.75. Pulse = 150 × `g_map`^(wave−1) Plasma (ignores armor, shields ×1.0). |
+
+| Rule | Mines | Lance |
+|---|---|---|
+| Stacking | Slow goes through the normal slow rule (§2): strongest wins, so 60% beats Stasis L3's 50% and fields don't add up. Slowed enemies count as slowed for Stasis' prefers-unslowed. | Overlap impossible (1 charge). |
+| Bosses | Take ×0.5 of the slow (30%). | Instead of pulse damage, each pulse deals `0.2 × (maxHp + maxShield) / 6`: a full strike takes **20%** of any boss, mid or final. |
+| Slow-immune (Anvil Tread) | Triggers the mine (wastes it), is not slowed. | Normal. |
+| Shields | No effect on slow. | Absorb first (×1.0), then HP; Plasma ignores armor. |
+| Kills | — | Bounty paid as usual; no tower gets the kill or damage credit. |
+| Airborne | None exist. If added: do not trigger and are not slowed. | Hit normally. |
+
+**Expected impact** (Normal):
+
+- **Lance:** about 5–8 strikes per map (~1 per 2–3 waves).
+  - Non-boss enemies: 6 pulses deal 900 × `g_map`^(w−1) to a target that stays in the beam. Any L/M enemy dies in 1–2 pulses; a Brood Carrier dies on pulse 5 and its brood dies to pulse 6; an Anvil Tread is left at ~15%.
+  - Hordes: a 24-Skitterling stream loses ~half (the beam catches ~5 at once plus ~1.7 more per pulse). A Husk or Rivet group in the beam is wiped.
+  - Bosses: 20% per strike. Final bosses take ~1,350 (Dust Choir 6,780), ~2,400 (Cinder Colossus 8,890 + 3,080 sh) and ~2,600 / 3,000 (Hollow Choir 12,950 / Colossus 11,230 + 3,890 sh). Dust's ~150 s final boss walk allows a second strike at most.
+- **Mines:** ~1.5 per wave cycle, 3 banked for a rush. One field turns a 3-tile crossing from 2.5 s to ~6 s for a Husk (1.2 t/s), and bunches streams for splash and chain. That is roughly one extra Stasis L2's worth per wave, aimed where needed.
+
+**UX.**
+
+- **Console:** two power buttons in a 1×2 column left of the tower grid, in the same tray with a divider. At ≤760 px they sit side by side in the cell under the command card (`'wave cmd' 'info pow'`).
+- **Button:** icon, hotkey top-left, and a clockwise sweep fill over the uncharged part. Bottom-right shows `n/3` for mines and the seconds left for the Lance.
+- **Ready state:** at ≥1 charge the border glows and the button reads READY. 0→1 charge plays a cue; the Lance also flashes "LANCE STRIKE READY".
+- **Targeting:** Q/E (or a click on the button) arms targeting. It is exclusive with build mode and clears the tower selection.
+  - Hover shows the tile highlight plus a ring: the mine's field footprint (1.5, teal) or the strike reticle (1.75, amber), red when invalid.
+  - Left-click uses the power and leaves targeting. Shift keeps mine targeting while charges remain.
+  - Esc, right-click or the same hotkey cancels.
+- **Tooltip:** in the info panel (like the tower tip), with name, description, charge time, key numbers and the targeting hint. Before wave 1: "Charging begins with the assault".
+
+**Look and sound** (original; player colours steel blue / gunmetal / amber, never hostile red or magenta):
+
+- **Mine:** a small gunmetal disc (~0.3 tile) with three prongs and a steel-blue rim, seated in the path recess, with an amber LED blinking at 1 Hz. On trigger: a ground thump ring out to 1.5 tiles and a dust kick. The field is a low teal ring decal with tremor ripples every 0.5 s that fades over its last 1.5 s.
+- **Lance telegraph:** a faint targeting thread from the sky and an amber triangular reticle at 1.75 whose brackets close in over 1.5 s. The center blinks, then flashes white 0.3 s before impact.
+- **Lance beam:** a white-hot core (~0.6 tile) inside a steel-blue/violet column glow. Each pulse flashes the ground and throws a shock ring. A glassy scorch decal (r 1.5) fades over 10 s. Optional camera shake of ≤2 px on impact, off under reduced motion.
+- **Audio** (WebAudio, synthesised):
+  - ready: a two-tone console chirp, distinct from the wave-clear chime;
+  - mine plant: a clunk and arming beep; mine trigger: a sub thump with a warble;
+  - telegraph: a rising whine with targeting ticks; pulse 0: a deep boom; later pulses: a sizzling hum.
+
+**Bots** (`npm run balance` stays meaningful): `withPowers(strategy)` wraps any strategy.
+
+- **Mines:** whenever a charge is ready, plant on the free path tile covered by the most tower range rings, skipping tiles within 1.5 of an armed mine. Ties go to the tile nearer the core.
+- **Lance:** when ready, target the tile of a living boss. Otherwise target the enemy tile whose 1.75 radius holds the most enemy HP + shields, and fire only if that is ≥ one full strike on one target (900 × `g_map`^(w−1)). No lead on fast targets.

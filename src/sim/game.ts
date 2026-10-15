@@ -125,6 +125,11 @@ export function createSim(config: SimConfig) {
     towers: [],
     enemies: [],
     projectiles: [],
+    // phase 2 (sim, GDD §14): charge from wave 1 launch, mines/fields/strikes step logic
+    powers: { tremor_mines: { charges: 0, charge: 0 }, lance_strike: { charges: 0, charge: 0 } },
+    mines: [],
+    tremorFields: [],
+    strikes: [],
     events: [],
   };
 
@@ -609,6 +614,8 @@ export function createSim(config: SimConfig) {
         launchWave(earlyCallBonus(s.nextWaveIn, config.difficultyId));
         return ok;
       }
+      case 'usePower':
+        return fail('Charging'); // phase 2 (sim): validate placement, spend a charge, plant mine / queue strike
       case 'pause':
         if (s.status !== 'playing') return fail('Not playing');
         s.status = 'paused';
@@ -639,6 +646,7 @@ export function createSim(config: SimConfig) {
     dispatch,
     step,
     canBuild,
+    canUsePower: () => false, // phase 2 (sim)
     drainEvents() {
       const events = s.events;
       s.events = [];

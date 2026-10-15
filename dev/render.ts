@@ -128,6 +128,10 @@ function step(dt: number): void {
     towers,
     enemies,
     projectiles: [],
+    powers: { tremor_mines: { charges: 0, charge: 0 }, lance_strike: { charges: 0, charge: 0 } },
+    mines: [],
+    tremorFields: [],
+    strikes: [],
     events: [],
   };
   renderer.render(state, dt);

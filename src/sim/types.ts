@@ -9,6 +9,7 @@ import type {
   DifficultyId,
   EnemyId,
   MapId,
+  PowerId,
   TargetingMode,
   TowerId,
 } from '../data/types';
@@ -74,6 +75,49 @@ export interface ProjectileState {
   readonly targetY: number;
 }
 
+/** Command power charge (GDD §14). Charging starts when wave 1 launches; `charge` holds at 0 while charges are full. */
+export interface PowerState {
+  /** Charges ready to use, 0..maxCharges. */
+  readonly charges: number;
+  /** Sim seconds charged toward the next charge, 0..chargeTime (HUD fill = charge / chargeTime). */
+  readonly charge: number;
+}
+
+/** An armed Tremor Mine waiting on a path tile (one per tile). */
+export interface MineState {
+  readonly id: number;
+  readonly col: number;
+  readonly row: number;
+  /** Tile center. */
+  readonly x: number;
+  readonly y: number;
+}
+
+/** A triggered mine's slow field. Same id as the mine that opened it. */
+export interface TremorFieldState {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  /** Seconds until it closes (render fades it out over the last ~1.5 s). */
+  readonly timeLeft: number;
+}
+
+/** A Lance Strike from use until its last pulse interval ends. */
+export interface StrikeState {
+  readonly id: number;
+  readonly col: number;
+  readonly row: number;
+  /** Target tile center. */
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  /** 'telegraph': reticle, no damage yet. 'firing': beam on, pulses every pulseInterval. */
+  readonly phase: 'telegraph' | 'firing';
+  /** Seconds left in the current phase. */
+  readonly timeLeft: number;
+}
+
 /** Transient events for VFX/audio/HUD. Accumulate across steps and dispatches until drained. */
 export type SimEvent =
   | { readonly type: 'build'; readonly towerId: number; readonly defId: TowerId; readonly col: number; readonly row: number }
@@ -100,7 +144,23 @@ export type SimEvent =
   | { readonly type: 'leak'; readonly enemyId: number; readonly defId: EnemyId; readonly lives: number }
   | { readonly type: 'waveStart'; readonly index: number; readonly earlyBonus: number; readonly boss: 'mid' | 'final' | null }
   | { readonly type: 'waveClear'; readonly index: number; readonly bonus: number }
-  | { readonly type: 'gameOver'; readonly result: 'victory' | 'defeat' };
+  | { readonly type: 'gameOver'; readonly result: 'victory' | 'defeat' }
+  /** A power gained a charge. Cue sound/flash only when `charges` is 1 (it just became usable). */
+  | { readonly type: 'powerReady'; readonly power: PowerId; readonly charges: number }
+  | { readonly type: 'minePlanted'; readonly mineId: number; readonly col: number; readonly row: number; readonly x: number; readonly y: number }
+  /** An enemy touched the mine: it is gone and a field with the same id opens (see GameState.tremorFields). */
+  | { readonly type: 'mineTriggered'; readonly mineId: number; readonly x: number; readonly y: number; readonly radius: number }
+  /** Strike used: reticle goes down, first pulse lands in `delay` s. */
+  | {
+      readonly type: 'strikeTelegraph';
+      readonly strikeId: number;
+      readonly x: number;
+      readonly y: number;
+      readonly radius: number;
+      readonly delay: number;
+    }
+  /** One damage pulse (0-based `index`; 0 = impact). Its damage arrives as ordinary 'hit'/'death' events. */
+  | { readonly type: 'strikePulse'; readonly strikeId: number; readonly x: number; readonly y: number; readonly radius: number; readonly index: number };
 
 export interface GameState {
   readonly mapId: MapId;
@@ -124,6 +184,10 @@ export interface GameState {
   readonly towers: readonly TowerState[];
   readonly enemies: readonly EnemyState[];
   readonly projectiles: readonly ProjectileState[];
+  readonly powers: Readonly<Record<PowerId, PowerState>>;
+  readonly mines: readonly MineState[];
+  readonly tremorFields: readonly TremorFieldState[];
+  readonly strikes: readonly StrikeState[];
   /** See Game.drainEvents. */
   readonly events: readonly SimEvent[];
 }
@@ -135,6 +199,11 @@ export type Command =
   | { readonly type: 'setTargeting'; readonly towerId: number; readonly mode: TargetingMode }
   /** Launch the next wave now. Before wave 1 this starts the game; during a countdown it pays the early-call bonus. */
   | { readonly type: 'callWave' }
+  /**
+   * Use a command power on a tile. Needs a charge. Mines: free 'path' tile (not spawn/core, no mine on it).
+   * Strike: any in-bounds tile. Errors: 'Charging', 'Mines go on the lane', 'Mine already there', 'Out of bounds'.
+   */
+  | { readonly type: 'usePower'; readonly power: PowerId; readonly col: number; readonly row: number }
   | { readonly type: 'pause' }
   | { readonly type: 'resume' }
   | { readonly type: 'setSpeed'; readonly speed: GameSpeed };
@@ -158,6 +227,8 @@ export interface Game {
   step(): void;
   /** Tile is a free build tile ('B' and no tower). Does not check cash. */
   canBuild(col: number, row: number): boolean;
+  /** usePower would be accepted on this tile right now (placement and charge). For the targeting preview. */
+  canUsePower(power: PowerId, col: number, row: number): boolean;
   /**
    * Returns and clears state.events. Events accumulate across every step() and dispatch()
    * since the last drain, so none are lost when a frame runs 0..N steps.

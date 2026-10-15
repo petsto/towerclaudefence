@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { ENEMIES, MAP_LIST, MAPS, TOWER_LIST, TOWERS } from './index';
+import { ENEMIES, MAP_LIST, MAPS, POWER_LIST, POWERS, TOWER_LIST, TOWERS } from './index';
 import type { MapDef, Tile } from './types';
 
 const WALKABLE: readonly Tile[] = ['path', 'spawn', 'core'];
@@ -105,4 +105,30 @@ test('picket upgrades raise damage and fire rate every level', () => {
 
 test('thumper fires 1/2/3 shells per volley', () => {
   expect(TOWERS.thumper.levels.map((l) => l.shots)).toEqual([1, 2, 3]);
+});
+
+test('powers: one per id, hotkeys clear of tower and HUD keys, sane numbers', () => {
+  expect(POWER_LIST.map((p) => p.id).sort()).toEqual(Object.keys(POWERS).sort());
+  // 1-6 towers; u/x/p/f/tab/space/esc HUD; w/a/s/d camera pan
+  const taken = new Set([...TOWER_LIST.map((t) => t.hotkey), 'u', 'x', 'p', 'f', 'w', 'a', 's', 'd']);
+  for (const p of POWER_LIST) {
+    expect(POWERS[p.id]).toBe(p);
+    expect(taken.has(p.hotkey), p.hotkey).toBe(false);
+    taken.add(p.hotkey);
+    expect(p.chargeTime).toBeGreaterThan(0);
+    expect(Number.isInteger(p.maxCharges) && p.maxCharges >= 1).toBe(true);
+  }
+  const m = POWERS.tremor_mines;
+  expect(m.slow).toBeGreaterThan(0);
+  expect(m.slow).toBeLessThan(1);
+  expect(m.fieldRadius).toBeGreaterThanOrEqual(m.triggerRadius);
+  expect(m.fieldDuration).toBeGreaterThan(0);
+  const l = POWERS.lance_strike;
+  expect(l.radius).toBeGreaterThan(0);
+  expect(l.telegraph).toBeGreaterThan(0);
+  expect(Number.isInteger(l.pulses) && l.pulses >= 1).toBe(true);
+  expect(l.pulseDamage).toBeGreaterThan(0);
+  expect(l.bossFraction).toBeGreaterThan(0);
+  expect(l.bossFraction).toBeLessThan(0.5); // decisive help, never a boss delete
+  expect(l.chargeTime).toBeGreaterThan(m.chargeTime);
 });

@@ -45,7 +45,8 @@ export interface Renderer {
   render(state: GameState, frameDt: number): void;
   pickTile(clientX: number, clientY: number): { col: number; row: number } | null;
   setHover(tile: { col: number; row: number } | null, valid: boolean): void;
-  setRangePreview(preview: { x: number; y: number; rangeTiles: number } | null): void;
+  /** Ring on the ground. `kind` (default 'tower'): 'mine' = tremor field footprint, 'strike' = Lance reticle (GDD §14). */
+  setRangePreview(preview: { x: number; y: number; rangeTiles: number; kind?: 'tower' | 'mine' | 'strike' } | null): void;
   setSelectedTower(id: number | null): void;
   /** CSS pixels of the container covered by the top HUD bar(s) and the bottom HUD console. */
   setInsets(topCss: number, bottomCss: number): void;

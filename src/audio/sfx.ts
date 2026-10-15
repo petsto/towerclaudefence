@@ -232,6 +232,13 @@ function soundFor(ev: SimEvent): SoundId | null {
     case 'upgrade': return 'upgrade';
     case 'sell': return 'sell';
     case 'spawn': return null;
+    // phase 2 (audio, GDD §14): powerReady (charges === 1), minePlanted, mineTriggered, strikeTelegraph, strikePulse
+    case 'powerReady':
+    case 'minePlanted':
+    case 'mineTriggered':
+    case 'strikeTelegraph':
+    case 'strikePulse':
+      return null;
   }
 }
 
