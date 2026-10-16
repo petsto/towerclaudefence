@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Steel Meridian UI states</title>
+<!-- Fonts: P1 puts these two lines in index.html and dev/ui.html (spec §1.3). -->
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@100..125,400..800&display=swap" />
+
+<!-- =====================================================================================
+  CANONICAL CSS. P1 copies <style id="tokens"> into src/ui/tokens.css and
+  <style id="components"> into src/ui/components.css (spec docs/design/ui-revamp.md §6).
+  <style id="demo"> only lays out this sheet; do not copy it.
+  Open via `npm run dev` at /docs/design/ui-mockup.html.
+====================================================================================== -->
+<style id="tokens">
+:root {
+  /* ---- surfaces (deep navy) ---- */
+  --bg-0: #020c16;            /* page floor, modal backdrop base */
+  --bg-1: #061a2e;            /* home backdrop mid */
+  --bg-2: #0a2444;            /* home backdrop glow */
+  --surface-locked: #04121f;
+  --surface: #00162f;         /* control fill, bottom */
+  --surface-hi: #00203e;      /* control fill, top */
+  --surface-hover: #003054;
+  --surface-sel: #013984;
+  --well: #010b13;            /* recessed readouts */
+  --panel-hi: rgba(10, 36, 66, 0.96);
+  --panel-lo: rgba(3, 16, 32, 0.97);
+
+  /* ---- lines: the state ladder (sampled from the reference tiles) ---- */
+  --line-locked: #223241;
+  --line-locked-in: #152331;
+  --line-halo: #093153;       /* 1px outside a normal control */
+  --line: #3b6990;            /* normal border */
+  --line-in: #21496c;         /* normal inner bevel */
+  --line-hover: #60a0c8;
+  --line-hover-in: #367097;
+  --line-hover-halo: #104665;
+  --line-sel: #95dcff;
+  --line-sel-hi: #b9f3ff;
+  --line-sel-in: #5c9dd0;
+  --line-faint: #14304d;      /* list rows, dividers */
+  --panel-edge-hi: #2c5a85;   /* panel frame gradient */
+  --panel-edge-lo: #12304f;
+  --glow-sel: #0850aa;
+
+  /* ---- text (reference legend; dim values raised to pass 4.5:1) ---- */
+  --text-locked: #62839a;     /* 4.7:1 on --surface-locked */
+  --text-dim: #6b8aa3;        /* 5.0:1 on --surface */
+  --text: #8dbfea;            /* 9.3:1 */
+  --text-body: #b8d4ec;       /* 11.8:1 */
+  --text-hover: #cce7ff;
+  --text-sel: #ffffff;
+  --cyan: #57d1ff;            /* headers, specials, credits icon */
+  --cyan-dim: #2a9fd0;        /* 6.0:1; #187da3 (reference) is lines-only, 3.9:1 */
+
+  /* ---- positive (reference "purchasable" green) ---- */
+  --pos: #1fad29;
+  --pos-hover: #3dd447;
+  --pos-sel: #4df458;
+  --pos-pale: #ccffd0;
+
+  /* ---- gold: primary CTA, costs, "equipped" mark ---- */
+  --gold-100: #ffe3ad;        /* text, pressed / selected */
+  --gold-200: #eed5a0;        /* text, normal (11.6:1 on --gold-800) */
+  --gold-300: #f7c06e;        /* border, pressed / selected */
+  --gold-400: #cca05d;        /* border, hover */
+  --gold-500: #8c6937;        /* border, normal */
+  --gold-600: #6d4515;        /* inner bevel */
+  --gold-700: #3a2413;        /* gunmetal-bronze casing */
+  --gold-800: #321705;        /* fill top */
+  --gold-900: #1a0901;        /* fill bottom */
+  --gold-glow: #ff9d2a;
+  --cost: #cf9d3d;            /* "equipped normal": 7.4:1 */
+  --cost-hi: #ffce71;
+  --gold-dis-line: #3e3630;
+  --gold-dis-fill: #1a1612;
+  --gold-dis-text: #8a8178;
+
+  /* ---- blue: secondary CTA ---- */
+  --blue-100: #d8ecff;
+  --blue-200: #9dbddb;        /* text, normal (8.4:1 on --blue-800) */
+  --blue-300: #98d1ff;        /* border, pressed / selected */
+  --blue-400: #5b8fc6;        /* border, hover */
+  --blue-500: #3f6080;        /* border, normal */
+  --blue-700: #1e436b;        /* inner bevel */
+  --blue-800: #041f3f;        /* fill top */
+  --blue-900: #00081a;        /* fill bottom */
+  --blue-glow: #2f8cff;
+  --blue-dis-line: #2b3a4c;
+  --blue-dis-fill: #08121e;
+  --blue-dis-text: #5d7186;
+
+  /* ---- danger ---- */
+  --danger: #ff6b5c;          /* text, 6.5:1 */
+  --danger-line: #c0281e;
+  --danger-hi: #ff6a4a;       /* boss HP fill top */
+  --danger-lo: #b3180c;       /* boss HP fill bottom */
+  --danger-glow: #ff2a1a;
+
+  /* ---- bars & ticks ---- */
+  --bar-track: #002234;
+  --bar-line: #0d2c48;
+  --bar-hi: #2a7fd6;
+  --bar-lo: #0a56a8;
+  --shield-hi: #9ad8ff;
+  --shield-lo: #2f7cff;
+  --tick: #d9d21c;
+  --tick-hi: #f4ee7a;
+
+  /* ---- level / tier badges: ring + disc ---- */
+  --badge-blue-ring: #74b6fd;   --badge-blue-disc: #002c6c;
+  --badge-white-ring: #dbf1ff;  --badge-white-disc: #0a2a5f;
+  --badge-gold-ring: #fec793;   --badge-gold-disc: #4e270d;
+  --badge-violet-ring: #a9b0dc; --badge-violet-disc: #252958;
+
+  /* ---- game semantics (unchanged meaning) ---- */
+  --dt-normal: #c8d0d8;
+  --dt-concussive: #38e0d0;
+  --dt-explosive: #ff8a3a;
+  --dt-plasma: #c48cff;
+  --chorus: #ff3ab0;
+  --remnant: #8cff4a;
+
+  --focus: #ffe3ad;
+
+  /* ---- glow / bevel recipes ---- */
+  --bevel: inset 0 1px 0 rgba(160, 210, 255, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+  --glow-hover: 0 0 0 1px var(--line-hover-halo), 0 0 8px rgba(47, 140, 255, 0.25);
+  --glow-select: 0 0 0 1px #0d4f9a, 0 0 6px 1px rgba(8, 80, 170, 0.95), 0 0 18px 4px rgba(8, 80, 170, 0.55);
+  --glow-gold: 0 0 0 2px #774307, 0 0 14px 2px rgba(255, 157, 42, 0.5);
+  --chamfer: polygon(var(--cut) 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%, 0 var(--cut));
+
+  /* ---- type ---- */
+  --font-display: 'Saira', 'Eurostile', 'Microgramma', Verdana, sans-serif; /* always with font-stretch: var(--wide) */
+  --font-body: 'Saira', 'Segoe UI', system-ui, sans-serif;
+  --wide: 125%;
+  --fs-hero: clamp(30px, 6vw, 72px);
+  --fs-h1: 24px;
+  --fs-h2: 12px;      /* panel headers */
+  --fs-label: 11px;   /* caps labels; never smaller */
+  --fs-btn: 13px;
+  --fs-body: 14px;
+  --fs-small: 12px;
+  --fs-num: 18px;     /* readouts */
+
+  /* ---- space, radii, motion, layers ---- */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --r-1: 2px; --r-2: 4px;
+  --cut: 10px; --cut-sm: 6px;
+  --t-fast: 90ms; --t: 140ms; --t-slow: 220ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --z-hud: 10; --z-floats: 20; --z-toast: 30; --z-modal: 50; --z-home: 100;
+}
+
+.sm-home, .sm-hud {
+  font: 500 var(--fs-body)/1.35 var(--font-body);
+  color: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+.sm-home [hidden], .sm-hud [hidden] { display: none !important; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.num { font-variant-numeric: tabular-nums; }
+
+@keyframes sm-blink { 50% { opacity: 0.3; } }
+@keyframes sm-gold-pulse {
+  50% { box-shadow: 0 0 0 2px #774307, 0 0 0 3px #000a, 0 0 18px 3px rgba(255, 157, 42, 0.45), inset 0 0 0 1px var(--gold-600); }
+}
+@keyframes sm-ready-burst {
+  0% { box-shadow: 0 0 0 1px var(--line-sel), 0 0 0 0 rgba(87, 209, 255, 0.9); }
+  100% { box-shadow: 0 0 0 1px var(--line-sel), 0 0 0 12px rgba(87, 209, 255, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sm-home *, .sm-hud *, .sm-home *::before, .sm-hud *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+</style>
+
+<style id="components">
+/* ===== panel: chamfered frame. Never on focusable elements (clip-path clips outlines and glows). ===== */
+.panel {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(180deg, var(--panel-edge-hi), var(--panel-edge-lo));
+  clip-path: var(--chamfer);
+  --cut: 10px;
+}
+.panel::before { /* 1px frame: the fill sits 1px inside the clipped gradient */
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  clip-path: var(--chamfer);
+  background:
+    linear-gradient(180deg, rgba(120, 190, 255, 0.09), transparent 28px),
+    linear-gradient(180deg, var(--panel-hi), var(--panel-lo));
+}
+.panel::after { /* bright corner brackets, bottom corners */
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--line-hover), var(--line-hover)) left bottom / 14px 1px no-repeat,
+    linear-gradient(var(--line-hover), var(--line-hover)) left bottom / 1px 14px no-repeat,
+    linear-gradient(var(--line-hover), var(--line-hover)) right bottom / 14px 1px no-repeat,
+    linear-gradient(var(--line-hover), var(--line-hover)) right bottom / 1px 14px no-repeat;
+}
+.panel-h {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-3);
+  font: 700 var(--fs-h2)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.panel-h::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(87, 209, 255, 0.55), transparent);
+}
+
+/* ===== well: recessed readout area ===== */
+.well {
+  position: relative;
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, #000910, var(--well));
+  box-shadow: inset 0 0 0 1px #0a2238, inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ===== buttons ===== */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: 36px;
+  padding: 0 18px;
+  border: 1px solid;
+  border-radius: var(--r-1);
+  font: 700 var(--fs-btn)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--t) var(--ease), border-color var(--t) var(--ease), box-shadow var(--t) var(--ease), background var(--t) var(--ease);
+}
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.btn:disabled { cursor: not-allowed; }
+.btn-lg { height: 48px; padding: 0 32px; font-size: 16px; letter-spacing: 0.16em; }
+
+/* primary: gold */
+.btn-primary {
+  color: var(--gold-200);
+  border-color: var(--gold-500);
+  background: linear-gradient(180deg, #4a2a0c 0%, var(--gold-800) 42%, var(--gold-900) 100%);
+  text-shadow: 0 1px 0 #000;
+  box-shadow:
+    0 0 0 2px var(--gold-700),
+    0 0 0 3px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px var(--gold-600),
+    inset 0 1px 0 1px rgba(255, 214, 150, 0.12);
+}
+.btn-primary:hover {
+  color: var(--gold-100);
+  border-color: var(--gold-400);
+  box-shadow:
+    0 0 0 2px var(--gold-700),
+    0 0 0 3px rgba(0, 0, 0, 0.65),
+    0 0 12px rgba(255, 157, 42, 0.28),
+    inset 0 0 0 1px #8a5a1c,
+    inset 0 1px 0 1px rgba(255, 214, 150, 0.18);
+}
+.btn-primary:active,
+.btn-primary[aria-pressed='true'] {
+  color: var(--gold-100);
+  border-color: var(--gold-300);
+  background: linear-gradient(180deg, #6b3a0c, #3a1d05);
+  box-shadow: var(--glow-gold), inset 0 0 0 1px #a56a21, inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.btn-primary:disabled {
+  color: var(--gold-dis-text);
+  border-color: var(--gold-dis-line);
+  background: var(--gold-dis-fill);
+  text-shadow: none;
+  box-shadow: 0 0 0 2px #1d1818, 0 0 0 3px rgba(0, 0, 0, 0.65);
+}
+.btn-primary.is-pulsing:not(:disabled) { animation: sm-gold-pulse 2.4s ease-in-out infinite; }
+
+/* secondary: blue */
+.btn-secondary {
+  color: var(--blue-200);
+  border-color: var(--blue-500);
+  background: linear-gradient(180deg, #0a2a52 0%, var(--blue-800) 45%, var(--blue-900) 100%);
+  box-shadow:
+    0 0 0 2px #0f1f33,
+    0 0 0 3px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px var(--blue-700),
+    inset 0 1px 0 1px rgba(160, 210, 255, 0.1);
+}
+.btn-secondary:hover {
+  color: var(--blue-100);
+  border-color: var(--blue-400);
+  box-shadow:
+    0 0 0 2px #0f1f33,
+    0 0 0 3px rgba(0, 0, 0, 0.65),
+    0 0 12px rgba(47, 140, 255, 0.3),
+    inset 0 0 0 1px #2c5f94,
+    inset 0 1px 0 1px rgba(160, 210, 255, 0.16);
+}
+.btn-secondary:active,
+.btn-secondary[aria-pressed='true'] {
+  color: #fff;
+  border-color: var(--blue-300);
+  background: linear-gradient(180deg, #0f3871, #001d4a);
+  box-shadow: 0 0 0 2px #104082, 0 0 14px 2px rgba(47, 140, 255, 0.5), inset 0 0 0 1px #457cb7, inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.btn-secondary:disabled {
+  color: var(--blue-dis-text);
+  border-color: var(--blue-dis-line);
+  background: var(--blue-dis-fill);
+  box-shadow: 0 0 0 2px #0b1520, 0 0 0 3px rgba(0, 0, 0, 0.65);
+}
+/* danger flavour (Sell, Quit): blue at rest, red on hover/press */
+.btn-danger:hover:not(:disabled) { color: #ffd6d0; border-color: var(--danger-line); box-shadow: 0 0 0 2px #2a0e0c, 0 0 12px rgba(255, 42, 26, 0.3), inset 0 0 0 1px #6a1a14; }
+.btn-danger:active:not(:disabled) { color: #fff; border-color: var(--danger); background: linear-gradient(180deg, #5a1410, #2a0705); }
+
+/* chevron notch under a large CTA. The button needs margin-bottom >= 12px. */
+.btn-chevron::before,
+.btn-chevron::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  pointer-events: none;
+}
+.btn-chevron::before { top: calc(100% + 3px); width: 46px; height: 13px; background: var(--gold-700); }
+.btn-chevron::after {
+  top: calc(100% + 3px);
+  width: 22px;
+  height: 8px;
+  background: linear-gradient(180deg, var(--gold-100), var(--gold-glow) 60%, #bc5f06);
+  transition: filter var(--t) var(--ease);
+}
+.btn-chevron:hover::after, .btn-chevron:active::after { filter: brightness(1.25) drop-shadow(0 0 3px var(--gold-glow)); }
+.btn-chevron:disabled::before { background: #1d1818; }
+.btn-chevron:disabled::after { background: var(--gold-dis-line); filter: none; }
+.btn-secondary.btn-chevron::before { background: #0f1f33; }
+.btn-secondary.btn-chevron::after { background: linear-gradient(180deg, #9ad8ff, var(--blue-glow) 60%, #0c4a8a); }
+.btn-secondary.btn-chevron:disabled::after { background: var(--blue-dis-line); }
+
+/* icon button: square, secondary palette */
+.btn-icon { width: 32px; height: 32px; padding: 0; }
+.btn-icon svg { width: 16px; height: 16px; }
+
+/* keycap hint inside buttons and tiles */
+kbd, .kbd {
+  font: 700 10px/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.04em;
+  color: var(--gold-200);
+  padding: 2px 4px;
+  border: 1px solid var(--gold-600);
+  border-radius: var(--r-1);
+  background: rgba(0, 0, 0, 0.45);
+  text-shadow: none;
+}
+
+/* ===== tile: the selectable-state ladder (map cards, build buttons, power buttons) =====
+   Radio form:  <label><input class="sr-only" type="radio"><span class="tile">…</span></label>
+   Button form: <button class="tile" aria-pressed="false">…</button>
+   State API:   :checked / [aria-pressed=true] = selected · [aria-disabled=true] / :disabled = locked */
+.tile {
+  position: relative;
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, var(--surface-hi), var(--surface) 70%);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--line-halo), inset 0 0 0 1px var(--line-in), var(--bevel);
+  cursor: pointer;
+  transition: border-color var(--t) var(--ease), box-shadow var(--t-slow) var(--ease), background var(--t) var(--ease), color var(--t) var(--ease);
+}
+button.tile { font: inherit; padding: 0; }
+.tile:hover, label:hover > .tile {
+  border-color: var(--line-hover);
+  background: linear-gradient(180deg, var(--surface-hover), #00203f 75%);
+  color: var(--text-hover);
+  box-shadow: var(--glow-hover), inset 0 0 0 1px var(--line-hover-in), var(--bevel);
+}
+.tile:active { background: linear-gradient(0deg, var(--surface-hover), var(--surface)); }
+:checked + .tile,
+.tile[aria-pressed='true'] {
+  border-color: var(--line-sel);
+  background: linear-gradient(180deg, var(--surface-sel), #002a5c 60%, #001a3d);
+  color: var(--text-sel);
+  box-shadow: var(--glow-select), inset 0 0 0 1px var(--line-sel-in), inset 0 1px 0 1px rgba(185, 243, 255, 0.35);
+}
+/* gold corner check = "this is what will launch" (radio tiles only) */
+:checked + .tile::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M0 0H24V24Z' fill='%23f7c06e' fill-opacity='.28'/%3E%3Cpath d='M.5 .5H23.5V23.5' fill='none' stroke='%23f7c06e'/%3E%3Cpath d='M11 6.5l3 3 6.5-7' fill='none' stroke='%23ffe3ad' stroke-width='2'/%3E%3C/svg%3E");
+}
+:focus-visible + .tile, .tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+:disabled + .tile,
+.tile[aria-disabled='true'],
+.tile:disabled {
+  border-color: var(--line-locked);
+  background: var(--surface-locked);
+  color: var(--text-locked);
+  box-shadow: inset 0 0 0 1px var(--line-locked-in);
+}
+:disabled + .tile, .tile:disabled { cursor: not-allowed; }
+.tile[aria-disabled='true'] .tile-art, :disabled + .tile .tile-art { opacity: 0.4; filter: grayscale(0.6); }
+/* a locked tile that is also selected (build mode armed, then credits dropped) keeps the selected frame */
+.tile[aria-disabled='true'][aria-pressed='true'] { border-color: var(--line-sel); box-shadow: var(--glow-select); }
+
+/* ===== segmented control (difficulty, wave mode) =====
+   <div class="seg" role="radiogroup"><label><input class="sr-only" type="radio"><span>Veteran</span></label>…</div> */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: var(--well);
+  box-shadow: 0 0 0 1px var(--line-halo);
+}
+.seg > label { flex: 1; cursor: pointer; }
+.seg > label + label > span { box-shadow: inset 1px 0 0 var(--line-in); }
+.seg > label > span {
+  display: block;
+  padding: 9px 14px;
+  text-align: center;
+  font: 700 var(--fs-btn)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+  transition: color var(--t) var(--ease), background var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+.seg > label:hover > span { color: var(--text-hover); background: var(--surface-hover); }
+.seg :checked + span {
+  color: #fff;
+  background: linear-gradient(180deg, #0f3871, #001d4a);
+  box-shadow: inset 0 0 0 1px var(--line-sel), 0 0 12px rgba(8, 80, 170, 0.9);
+  position: relative;
+}
+.seg :focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; position: relative; }
+.seg :disabled + span { color: var(--text-locked); cursor: not-allowed; }
+
+/* ===== range slider (custom wave count) =====
+   JS sets --val (fill %) and --zone (start % of the heavy zone) on the input. */
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  margin: 10px 0;
+  border: 1px solid var(--bar-line);
+  border-radius: 1px;
+  background: /* top to bottom: heavy-zone hatch, fill, track */
+    repeating-linear-gradient(-45deg, rgba(255, 107, 92, 0.6) 0 3px, transparent 3px 6px) right / calc(100% - var(--zone, 100%)) 100% no-repeat,
+    linear-gradient(90deg, var(--bar-hi), var(--bar-lo)) 0 0 / var(--val, 50%) 100% no-repeat,
+    var(--bar-track);
+  cursor: pointer;
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 22px;
+  border: 1px solid var(--line-sel);
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, #1e5fa8, #0a2f5e);
+  box-shadow: 0 0 0 1px #000, 0 0 8px rgba(47, 140, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.range::-moz-range-thumb {
+  width: 12px;
+  height: 20px;
+  border: 1px solid var(--line-sel);
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, #1e5fa8, #0a2f5e);
+  box-shadow: 0 0 0 1px #000, 0 0 8px rgba(47, 140, 255, 0.6);
+}
+.range:hover::-webkit-slider-thumb { border-color: #fff; }
+.range:focus-visible { outline: 2px solid var(--focus); outline-offset: 6px; }
+.range:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ===== checkbox (consumer: pause modal "Sound") ===== */
+.check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; color: var(--text); }
+.check-box {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: var(--well);
+  box-shadow: 0 0 0 1px var(--line-halo);
+}
+.check:hover .check-box { border-color: var(--line-hover); }
+.check :checked + .check-box { border-color: var(--line-sel); box-shadow: 0 0 6px rgba(47, 140, 255, 0.6); }
+.check :checked + .check-box::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  width: 5px;
+  height: 10px;
+  border: solid var(--text-hover);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.check :focus-visible + .check-box { outline: 2px solid var(--focus); outline-offset: 2px; }
+.check :disabled + .check-box { border-color: var(--line-locked); background: var(--surface-locked); box-shadow: none; }
+
+/* ===== resource readout ===== */
+.res { display: inline-flex; align-items: center; gap: 6px; }
+.res-ico { width: 18px; height: 18px; flex: none; }
+.res-ico svg { display: block; width: 100%; height: 100%; }
+.res-val {
+  font: 600 var(--fs-num)/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 0 6px rgba(87, 209, 255, 0.35);
+}
+.res-label {
+  font: 700 var(--fs-label)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.res-credits .res-ico { color: var(--cyan); filter: drop-shadow(0 0 3px rgba(87, 209, 255, 0.8)); }
+.res-lives .res-ico { color: var(--text); }
+.res.is-low .res-ico, .res.is-low .res-val { color: var(--danger); text-shadow: 0 0 6px var(--danger-glow); animation: sm-blink 1s steps(1) infinite; }
+
+/* ===== progress / HP bars with tick markers ===== */
+.bar {
+  position: relative;
+  height: 8px;
+  border: 1px solid var(--bar-line);
+  border-radius: 1px;
+  background: var(--bar-track);
+}
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(180deg, var(--bar-hi), var(--bar-lo));
+  box-shadow: 0 0 6px rgba(47, 140, 255, 0.45);
+  transition: width 0.15s linear;
+}
+.bar-danger .bar-fill { background: linear-gradient(180deg, var(--danger-hi), var(--danger-lo)); box-shadow: 0 0 6px rgba(255, 42, 26, 0.45); }
+.bar-shield { height: 5px; }
+.bar-shield .bar-fill { background: linear-gradient(180deg, var(--shield-hi), var(--shield-lo)); }
+.bar-tick { /* style="left: 40%" */
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 4px;
+  margin-left: -2px;
+  background: linear-gradient(180deg, var(--tick-hi), var(--tick) 40%, #8f8a06);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+}
+.bar-tick.is-past { filter: saturate(0.3) brightness(0.6); }
+
+/* ===== circular badge: wave number, tower level, map tier ===== */
+.badge {
+  --size: 28px;
+  --ring: var(--badge-blue-ring);
+  --disc: var(--badge-blue-disc);
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  font: 800 calc(var(--size) * 0.46)/1 var(--font-display);
+  font-stretch: var(--wide);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 1px 0 #000;
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--disc), #fff 22%) 0, var(--disc) 55%, #00040c 100%);
+  box-shadow:
+    0 0 0 2px var(--ring),
+    0 0 0 3px rgba(0, 0, 0, 0.8),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.55),
+    0 0 8px color-mix(in srgb, var(--ring), transparent 45%);
+}
+.badge-white { --ring: var(--badge-white-ring); --disc: var(--badge-white-disc); }
+.badge-gold { --ring: var(--badge-gold-ring); --disc: var(--badge-gold-disc); color: #fff3e2; }
+.badge-violet { --ring: var(--badge-violet-ring); --disc: var(--badge-violet-disc); }
+
+/* ===== chip: damage type, enemy tags ===== */
+.chip {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--r-1);
+  font: 700 10px/1.2 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.chip[data-type='normal'] { color: var(--dt-normal); }
+.chip[data-type='concussive'] { color: var(--dt-concussive); }
+.chip[data-type='explosive'] { color: var(--dt-explosive); }
+.chip[data-type='plasma'] { color: var(--dt-plasma); }
+
+/* ===== tip card: info-panel tooltip (tower / power schematics) ===== */
+.tip {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-hover);
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, rgba(0, 48, 84, 0.55), rgba(1, 11, 19, 0.92));
+  box-shadow: 0 0 10px rgba(8, 80, 170, 0.4);
+}
+.tip-title {
+  font: 700 15px/1.1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+/* ===== list row: label/value pairs (intel, end-screen stats) ===== */
+.rows { display: grid; gap: 3px; margin: 0; }
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 28px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--r-1);
+  background: linear-gradient(90deg, rgba(0, 32, 62, 0.85), rgba(0, 22, 47, 0.35));
+}
+.row dt, .row-k {
+  font: 700 var(--fs-label)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.row dd, .row-v { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; text-align: right; }
+
+/* ===== modal ===== */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: radial-gradient(ellipse at center, rgba(2, 18, 36, 0.62), rgba(1, 6, 12, 0.88));
+  pointer-events: auto;
+}
+.modal {
+  width: min(400px, 100%);
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  padding: var(--sp-5) var(--sp-5) 28px;
+  text-align: center;
+  --cut: 14px;
+}
+.modal-title {
+  margin: 0;
+  font: 800 30px/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 14px rgba(87, 209, 255, 0.55);
+}
+.modal-sub {
+  margin: 10px 0 var(--sp-5);
+  font: 700 var(--fs-label)/1.3 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.modal-actions { display: grid; gap: 14px; }
+.modal-actions .btn { width: 100%; }
+</style>
+
+<style id="demo">
+html, body { margin: 0; background: var(--bg-0); }
+body {
+  min-height: 100vh;
+  background: radial-gradient(ellipse at 50% 0%, var(--bg-2) 0%, var(--bg-1) 35%, var(--bg-0) 75%);
+  padding: 32px 24px 64px;
+  box-sizing: border-box;
+}
+.sheet { max-width: 1280px; margin: 0 auto; display: grid; gap: 36px; }
+.sheet > header { text-align: center; }
+.kicker { font: 700 13px/1 var(--font-display); font-stretch: var(--wide); letter-spacing: 0.2em; color: var(--cyan); text-transform: uppercase; }
+.hero {
+  margin: 8px 0 0;
+  font: 800 var(--fs-hero)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.08em;
+  background: linear-gradient(180deg, #ffffff 0%, #cfe8ff 40%, #6f9fd0 55%, #e0f1ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 12px rgba(47, 140, 255, 0.45)) drop-shadow(0 2px 0 #000);
+}
+h2.sec { margin: 0 0 14px; font: 700 12px/1 var(--font-display); font-stretch: var(--wide); letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase; }
+.grid { display: grid; gap: 28px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; }
+.stack { display: grid; gap: 18px; justify-items: start; }
+.states { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.states > figure { margin: 0; display: grid; gap: 6px; justify-items: center; }
+figcaption { font: 600 11px/1.2 var(--font-body); color: var(--text-dim); text-align: center; }
+figcaption code { color: var(--text); font-size: 10px; }
+.legend { font: 500 12px/1.6 var(--font-body); color: var(--text-dim); }
+.legend b { color: var(--text-body); font-weight: 600; }
+.sw { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; box-shadow: 0 0 0 1px #000; }
+
+/* map card demo */
+.map-card { display: block; }
+.map-card .tile { padding: 6px; gap: 8px; }
+.map-card .tile-art { position: relative; display: block; aspect-ratio: 3 / 2; border-radius: 1px; background: linear-gradient(135deg, #6b4e33, #8a6a44 40%, #4a3828); box-shadow: inset 0 0 0 1px #000; }
+.map-card .badge { position: absolute; right: 6px; bottom: 6px; --size: 24px; }
+.map-name { font: 700 13px/1.1 var(--font-display); font-stretch: var(--wide); letter-spacing: 0.06em; text-transform: uppercase; padding: 0 2px; }
+.map-meta { font-size: 12px; color: var(--text-dim); padding: 0 2px 2px; }
+:checked + .tile .map-meta { color: var(--cyan); }
+
+/* build button demo */
+.cmd { width: 56px; height: 56px; place-items: center; }
+.cmd svg { width: 58%; height: 58%; }
+.cmd-key { position: absolute; top: 3px; left: 4px; font: 700 11px/1 var(--font-display); font-stretch: var(--wide); color: var(--gold-200); }
+.cmd-cost { position: absolute; right: 4px; bottom: 3px; font: 600 11px/1 var(--font-display); font-variant-numeric: tabular-nums; color: var(--cost); }
+.tile[aria-disabled='true'] .cmd-cost { color: var(--danger); }
+.pow-sweep { position: absolute; inset: 0; pointer-events: none; background: conic-gradient(#0000 0 var(--fill, 0%), rgba(87, 209, 255, 0.7) var(--fill, 0%) calc(var(--fill, 0%) + 0.8%), rgba(0, 4, 12, 0.72) 0); }
+.pow-ready { position: absolute; top: 3px; right: 4px; font: 700 9px/1 var(--font-display); font-stretch: var(--wide); color: var(--pos-hover); text-shadow: 0 0 4px rgba(61, 212, 71, 0.8); }
+.tile.pow[data-ready]:not([aria-pressed='true']) { border-color: var(--line-sel); box-shadow: 0 0 0 1px var(--line-sel), 0 0 10px rgba(87, 209, 255, 0.45); animation: sm-ready-burst 0.6s ease-out 1; }
+
+/* HUD strip demo */
+.hud-demo { position: relative; height: 300px; border: 1px solid var(--line-faint); background: linear-gradient(135deg, #5c4330, #7a5a3a 40%, #4a3828); overflow: hidden; }
+.demo-top { position: absolute; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; }
+.demo-top .panel { display: flex; align-items: center; gap: 14px; height: 38px; padding: 0 8px 0 14px; --cut: 8px; }
+.demo-wave { flex-direction: column; justify-content: center; gap: 5px !important; padding: 0 16px !important; min-width: 220px; }
+.demo-wave .bar { width: 100%; }
+.demo-wave-line { display: flex; justify-content: space-between; width: 100%; align-items: baseline; }
+.demo-console { position: absolute; left: 0; right: 0; bottom: 0; height: 132px; display: grid; grid-template-columns: 230px minmax(0, 1fr) auto auto; gap: 10px; padding: 14px 12px 10px; box-sizing: border-box; --cut: 14px; }
+.demo-console > .well { padding: 8px 10px; min-width: 0; overflow: hidden; }
+.tray { display: grid; grid-template-columns: repeat(3, 48px); grid-auto-rows: 48px; gap: 5px; padding: 5px; align-content: center; }
+.tray.pow-col { grid-template-columns: 48px; }
+.tray .cmd { width: 48px; height: 48px; }
+.info-head { display: flex; align-items: center; gap: 10px; }
+.stats { display: flex; gap: 18px; margin: 8px 0 4px; }
+.stat-k { font: 700 10px/1 var(--font-display); font-stretch: var(--wide); letter-spacing: 0.14em; color: var(--text-dim); }
+.stat-v { font: 600 16px/1.2 var(--font-display); font-variant-numeric: tabular-nums; color: #fff; }
+.spec { font-size: 12px; color: var(--cyan); }
+.delta { font-size: 11px; color: var(--pos-hover); }
+.actions { display: grid; gap: 8px; width: 190px; align-content: center; }
+.actions .btn { height: 30px; justify-content: space-between; padding: 0 10px; font-size: 11px; }
+.actions .v { font: 600 13px/1 var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.toast { position: absolute; top: 34%; left: 50%; transform: translateX(-50%); padding: 7px 28px; font: 700 15px/1.2 var(--font-display); font-stretch: var(--wide); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; color: var(--gold-100); text-shadow: 0 0 8px rgba(255, 157, 42, 0.6), 0 1px 0 #000; background: linear-gradient(90deg, transparent, rgba(1, 11, 19, 0.85) 18%, rgba(1, 11, 19, 0.85) 82%, transparent); border-image: linear-gradient(90deg, transparent, var(--line-hover), transparent) 1; border-width: 1px 0; border-style: solid; }
+.toast.is-warn { color: var(--danger); text-shadow: 0 0 8px var(--danger-glow), 0 1px 0 #000; border-image: linear-gradient(90deg, transparent, var(--danger-line), transparent) 1; }
+.wave-ctrl { display: grid; gap: 10px; width: 100%; max-width: 380px; }
+.stepper { display: flex; align-items: center; gap: 8px; }
+.stepper output { min-width: 56px; padding: 6px 0; text-align: center; font: 700 20px/1 var(--font-display); font-stretch: var(--wide); font-variant-numeric: tabular-nums; color: #fff; }
+.zone-note { font-size: 12px; color: var(--danger); display: flex; gap: 8px; align-items: center; }
+.ticks { position: relative; height: 14px; font: 600 10px/1 var(--font-display); color: var(--text-dim); }
+.ticks span { position: absolute; transform: translateX(-50%); }
+.ticks .heavy { color: var(--tick); }
+</style>
+</head>
+<body class="sm-home">
+<div class="sheet">
+  <header>
+    <div class="kicker">Steel Meridian · UI revamp</div>
+    <div class="hero">STEEL MERIDIAN</div>
+    <p class="legend" style="margin-top:14px">Component states sheet. Hex per state in <code>docs/design/ui-revamp.md</code> §1.</p>
+  </header>
+
+  <!-- ============ TILES ============ -->
+  <section>
+    <h2 class="sec">Tile ladder · map card (radio form)</h2>
+    <div class="states" style="max-width:860px">
+      <figure><label class="map-card"><input class="sr-only" type="radio" name="d1" disabled><span class="tile"><span class="tile-art"><span class="badge">1</span></span><span class="map-name">Dust Ridge</span><span class="map-meta">Badlands · 15 waves</span></span></label><figcaption>locked / disabled<br><code>#223241</code> line · <code>#62839a</code> text</figcaption></figure>
+      <figure><label class="map-card"><input class="sr-only" type="radio" name="d1"><span class="tile"><span class="tile-art"><span class="badge badge-white">2</span></span><span class="map-name">Cinder Forge</span><span class="map-meta">Volcanic · 18 waves</span></span></label><figcaption>normal<br><code>#3b6990</code> line · <code>#8dbfea</code> text</figcaption></figure>
+      <figure><label class="map-card"><input class="sr-only" type="radio" name="d1"><span class="tile" style="border-color:var(--line-hover);background:linear-gradient(180deg,var(--surface-hover),#00203f 75%);color:var(--text-hover);box-shadow:var(--glow-hover),inset 0 0 0 1px var(--line-hover-in),var(--bevel)"><span class="tile-art"><span class="badge badge-gold">3</span></span><span class="map-name">Hollow Spire</span><span class="map-meta">Crystal · 20 waves</span></span></label><figcaption>hover (forced)<br><code>#60a0c8</code> line · <code>#cce7ff</code> text</figcaption></figure>
+      <figure><label class="map-card"><input class="sr-only" type="radio" name="d1" checked><span class="tile"><span class="tile-art"><span class="badge badge-violet">4</span></span><span class="map-name">Dust Ridge</span><span class="map-meta">Badlands · 15 waves</span></span></label><figcaption>selected + gold check<br><code>#95dcff</code> line · <code>#ffffff</code> text</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ============ BUTTONS ============ -->
+  <section class="grid">
+    <div>
+      <h2 class="sec">Primary (gold) · normal / hover / pressed / disabled</h2>
+      <div class="stack" style="gap:30px">
+        <button class="btn btn-primary btn-lg btn-chevron" type="button">Begin operation</button>
+        <button class="btn btn-primary btn-lg btn-chevron" type="button" style="color:var(--gold-100);border-color:var(--gold-400);box-shadow:0 0 0 2px var(--gold-700),0 0 0 3px #000a,0 0 12px rgba(255,157,42,.28),inset 0 0 0 1px #8a5a1c">Begin operation</button>
+        <button class="btn btn-primary btn-lg btn-chevron" type="button" aria-pressed="true">Begin operation</button>
+        <button class="btn btn-primary btn-lg btn-chevron" type="button" disabled>Begin operation</button>
+      </div>
+    </div>
+    <div>
+      <h2 class="sec">Secondary (blue) · normal / hover / pressed / disabled</h2>
+      <div class="stack" style="gap:30px">
+        <button class="btn btn-secondary btn-lg btn-chevron" type="button">Restart mission</button>
+        <button class="btn btn-secondary btn-lg btn-chevron" type="button" style="color:var(--blue-100);border-color:var(--blue-400);box-shadow:0 0 0 2px #0f1f33,0 0 0 3px #000a,0 0 12px rgba(47,140,255,.3),inset 0 0 0 1px #2c5f94">Restart mission</button>
+        <button class="btn btn-secondary btn-lg btn-chevron" type="button" aria-pressed="true">Restart mission</button>
+        <button class="btn btn-secondary btn-lg btn-chevron" type="button" disabled>Restart mission</button>
+      </div>
+    </div>
+    <div>
+      <h2 class="sec">Compact · icon · danger</h2>
+      <div class="stack">
+        <button class="btn btn-primary is-pulsing" type="button">Begin assault <kbd>SPACE</kbd></button>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-secondary btn-icon" type="button" aria-label="Speed">1×</button>
+          <button class="btn btn-secondary btn-icon" type="button" aria-label="Pause"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M8 5v14M16 5v14"/></svg></button>
+          <button class="btn btn-secondary btn-icon" type="button" aria-label="Mute" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor" fill-opacity=".3"/><path d="M16 9l6 6M22 9l-6 6"/></svg></button>
+          <button class="btn btn-secondary btn-icon" type="button" aria-label="Disabled" disabled>3×</button>
+        </div>
+        <button class="btn btn-secondary btn-danger" type="button">Sell <span class="num" style="color:var(--pos-hover)">+112 cr</span> <kbd>X</kbd></button>
+        <p class="legend">Gold: <span class="sw" style="background:#8c6937"></span><b>#8c6937</b> → <span class="sw" style="background:#cca05d"></span><b>#cca05d</b> → <span class="sw" style="background:#f7c06e"></span><b>#f7c06e</b> · off <span class="sw" style="background:#3e3630"></span><b>#3e3630</b><br>
+        Blue: <span class="sw" style="background:#3f6080"></span><b>#3f6080</b> → <span class="sw" style="background:#5b8fc6"></span><b>#5b8fc6</b> → <span class="sw" style="background:#98d1ff"></span><b>#98d1ff</b> · off <span class="sw" style="background:#2b3a4c"></span><b>#2b3a4c</b></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ INPUTS ============ -->
+  <section class="grid">
+    <div>
+      <h2 class="sec">Segmented · difficulty</h2>
+      <div class="seg" role="radiogroup" aria-label="Difficulty">
+        <label><input class="sr-only" type="radio" name="d2"><span>Recruit</span></label>
+        <label><input class="sr-only" type="radio" name="d2" checked><span>Veteran</span></label>
+        <label><input class="sr-only" type="radio" name="d2"><span>Elite</span></label>
+        <label><input class="sr-only" type="radio" name="d2"><span>Brutal</span></label>
+      </div>
+    </div>
+    <div>
+      <h2 class="sec">Wave count · custom, value in heavy zone</h2>
+      <div class="wave-ctrl">
+        <div class="seg" role="radiogroup" aria-label="Waves" style="display:flex">
+          <label><input class="sr-only" type="radio" name="d3"><span>Campaign · 15</span></label>
+          <label><input class="sr-only" type="radio" name="d3" checked><span>Custom</span></label>
+        </div>
+        <div class="stepper">
+          <button class="btn btn-secondary btn-icon" type="button" aria-label="Fewer waves">−</button>
+          <output class="well">44</output>
+          <button class="btn btn-secondary btn-icon" type="button" aria-label="More waves">+</button>
+          <span class="badge badge-violet" style="--size:22px;margin-left:auto" title="Heavy assault">!</span>
+        </div>
+        <div>
+          <input class="range" type="range" min="1" max="50" value="44" aria-label="Custom wave count" style="--val:87.8%;--zone:81.6%">
+          <div class="ticks" aria-hidden="true"><span style="left:0%">1</span><span style="left:18.4%">10</span><span style="left:38.8%">20</span><span style="left:59.2%">30</span><span class="heavy" style="left:81.6%">41</span><span style="left:100%">50</span></div>
+        </div>
+        <div class="zone-note">Waves 41–44: bosses and heavies only</div>
+      </div>
+    </div>
+    <div>
+      <h2 class="sec">Checkbox · badges</h2>
+      <div class="stack">
+        <div style="display:flex;gap:18px">
+          <label class="check"><input class="sr-only" type="checkbox"><span class="check-box"></span>Off</label>
+          <label class="check"><input class="sr-only" type="checkbox" checked><span class="check-box"></span>On</label>
+          <label class="check"><input class="sr-only" type="checkbox" disabled><span class="check-box"></span>Off</label>
+        </div>
+        <div style="display:flex;gap:14px;align-items:center">
+          <span class="badge" style="--size:40px">8</span>
+          <span class="badge badge-white" style="--size:40px">2</span>
+          <span class="badge badge-gold" style="--size:40px">15</span>
+          <span class="badge badge-violet" style="--size:40px">4</span>
+          <span class="badge" style="--size:22px">1</span>
+          <span class="badge badge-gold" style="--size:22px">3</span>
+        </div>
+        <p class="legend">Tower level: L1 blue · L2 white · L3 gold. Map tier: 1 blue · 2 white · 3 gold · 4+ violet.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BARS / ROWS / CHIPS ============ -->
+  <section class="grid">
+    <div>
+      <h2 class="sec">Wave progress · ticks at boss waves</h2>
+      <div class="stack" style="justify-items:stretch">
+        <div class="bar"><div class="bar-fill" style="width:46%"></div><i class="bar-tick is-past" style="left:40%"></i><i class="bar-tick" style="left:100%"></i></div>
+        <div class="bar bar-danger"><div class="bar-fill" style="width:72%"></div></div>
+        <div class="bar bar-shield"><div class="bar-fill" style="width:38%"></div></div>
+      </div>
+    </div>
+    <div>
+      <h2 class="sec">List rows</h2>
+      <dl class="rows">
+        <div class="row"><dt>Biome</dt><dd>Badlands</dd></div>
+        <div class="row"><dt>Threat</dt><dd><span class="badge" style="--size:20px">1</span></dd></div>
+        <div class="row"><dt>Credits</dt><dd class="num">600 cr</dd></div>
+      </dl>
+    </div>
+    <div>
+      <h2 class="sec">Chips · keycaps · readouts</h2>
+      <div class="stack">
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip" data-type="normal">Normal</span><span class="chip" data-type="concussive">Concussive</span><span class="chip" data-type="explosive">Explosive</span><span class="chip" data-type="plasma">Plasma</span><kbd>1</kbd><kbd>Q</kbd><kbd>SPACE</kbd></div>
+        <div style="display:flex;gap:18px;align-items:center">
+          <span class="res res-credits"><span class="res-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l8 5v10l-8 5-8-5V7z" fill="currentColor" fill-opacity=".25"/></svg></span><span class="res-val">1,250</span></span>
+          <span class="res res-lives"><span class="res-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg></span><span class="res-val">20</span></span>
+          <span class="res res-lives is-low"><span class="res-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg></span><span class="res-val">4</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ HUD COMMAND TILES ============ -->
+  <section>
+    <h2 class="sec">Command card · build and power buttons</h2>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:end">
+      <figure style="margin:0;display:grid;gap:6px;justify-items:center"><button class="tile cmd" type="button" aria-pressed="false"><span class="cmd-key">1</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="13" width="14" height="7"/><rect x="8" y="9" width="8" height="5"/><path d="M10 9V3M14 9V3"/></svg><span class="cmd-cost">100</span></button><figcaption>normal</figcaption></figure>
+      <figure style="margin:0;display:grid;gap:6px;justify-items:center"><button class="tile cmd" type="button" aria-pressed="true"><span class="cmd-key">2</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20h16"/><path d="M8 20l2-8h4l2 8"/><path d="M10 12l-1-5h6l-1 5"/></svg><span class="cmd-cost">150</span></button><figcaption>build armed</figcaption></figure>
+      <figure style="margin:0;display:grid;gap:6px;justify-items:center"><button class="tile cmd" type="button" aria-disabled="true"><span class="cmd-key">4</span><svg class="tile-art" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h18M3 11h18"/><path d="M7 11v9M17 11v9M7 16h10"/></svg><span class="cmd-cost">225</span></button><figcaption>unaffordable</figcaption></figure>
+      <span style="width:1px;align-self:stretch;background:var(--line-in);margin:0 6px"></span>
+      <figure style="margin:0;display:grid;gap:6px;justify-items:center"><button class="tile cmd pow" type="button" aria-disabled="true" style="--fill:0%"><span class="pow-sweep"></span><span class="cmd-key">Q</span><svg class="tile-art" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 19h20"/><path d="M7 19v-2.5h10V19"/></svg><span class="cmd-cost" style="font-size:8px;color:var(--text-locked)">STANDBY</span></button><figcaption>standby</figcaption></figure>
+      <figure style="margin:0;display:grid;gap:6px;justify-items:center"><button class="tile cmd pow" type="button" style="--fill:62%"><span class="pow-sweep"></span><span class="cmd-key">E</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.5 1.5h5L13.2 16h-2.4z"/><ellipse cx="12" cy="16.5" rx="5" ry="2"/></svg><span class="cmd-cost" style="color:#fff">57s</span></button><figcaption>charging 62%</figcaption></figure>
+      <figure style="margin:0;display:grid;gap:6px;justify-items:center"><button class="tile cmd pow" type="button" data-ready style="--fill:40%"><span class="pow-sweep"></span><span class="cmd-key">Q</span><span class="pow-ready">READY</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 19h20"/><path d="M7 19v-2.5h10V19"/><path d="M9 16.5L8 13M12 16.5V12.5M15 16.5l1-3.5"/></svg><span class="cmd-cost" style="color:#fff">2/3</span></button><figcaption>ready, 2 stored</figcaption></figure>
+      <figure style="margin:0;display:grid;gap:6px;justify-items:center"><button class="tile cmd pow" type="button" data-ready aria-pressed="true" style="--fill:100%"><span class="pow-sweep"></span><span class="cmd-key">E</span><span class="pow-ready">READY</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.5 1.5h5L13.2 16h-2.4z"/><ellipse cx="12" cy="16.5" rx="5" ry="2"/></svg><span class="cmd-cost"></span></button><figcaption>targeting</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- ============ HUD COMPOSITION ============ -->
+  <section>
+    <h2 class="sec">HUD composition · 1280 wide, console 132 px</h2>
+    <div class="hud-demo sm-hud">
+      <div class="demo-top">
+        <div class="panel"><span class="res-label">Dust Ridge · Veteran</span></div>
+        <div class="panel demo-wave"><div class="demo-wave-line"><span class="res-label">Wave <span class="res-val" style="font-size:16px">07</span> / 15</span><span class="res-label">Next <span class="res-val" style="font-size:14px">0:12</span></span></div><div class="bar"><div class="bar-fill" style="width:40%"></div><i class="bar-tick is-past" style="left:53.3%"></i><i class="bar-tick" style="left:100%"></i></div></div>
+        <div class="panel"><span class="res res-credits"><span class="res-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l8 5v10l-8 5-8-5V7z" fill="currentColor" fill-opacity=".25"/></svg></span><span class="res-val">1,250</span></span><span class="res res-lives"><span class="res-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></svg></span><span class="res-val">20</span></span><span style="display:flex;gap:4px"><button class="btn btn-secondary btn-icon" type="button">2×</button><button class="btn btn-secondary btn-icon" type="button" aria-label="Pause menu (P)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M8 5v14M16 5v14"/></svg></button><button class="btn btn-secondary btn-icon" type="button" aria-label="Mute" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor" fill-opacity=".3"/><path d="M16 8c2 2 2 6 0 8M19 5c4 4 4 10 0 14"/></svg></button></span></div>
+      </div>
+      <div class="toast">Wave 08 incoming · early bonus +60</div>
+      <div class="demo-console panel">
+        <section class="well" style="display:flex;flex-direction:column;gap:6px">
+          <div class="res-label">Next contacts</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap"><span class="chip" style="color:var(--chorus)">12× Skitterling</span><span class="chip" style="color:var(--danger)">1× Choir Mother</span></div>
+          <button class="btn btn-primary" type="button" style="margin-top:auto;height:30px;justify-content:space-between;padding:0 10px;font-size:11px">Call wave <span class="num" style="color:var(--pos-pale)">+60 cr</span></button>
+        </section>
+        <section class="well" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px">
+          <div>
+            <div class="info-head"><span class="badge badge-white" style="--size:24px">2</span><span class="tip-title">Arc Coil</span><span class="chip" data-type="plasma">Plasma</span></div>
+            <div class="stats"><div><div class="stat-k">DMG</div><div class="stat-v">20</div></div><div><div class="stat-k">RATE</div><div class="stat-v">1.25s</div></div><div><div class="stat-k">RANGE</div><div class="stat-v">3.5</div></div><div><div class="stat-k">KILLS</div><div class="stat-v">14</div></div></div>
+            <div class="spec">Chain +4 · Shield ×1.5</div>
+            <div class="delta">NEXT ▸ DMG 20→26 · CD 1.25→1.00</div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-secondary" type="button">Target <span class="v" style="color:var(--cyan)">First</span></button>
+            <button class="btn btn-secondary" type="button">Upgrade <span class="v" style="color:var(--cost)">200 cr</span></button>
+            <button class="btn btn-secondary btn-danger" type="button">Sell <span class="v" style="color:var(--pos-hover)">+336 cr</span></button>
+          </div>
+        </section>
+        <div class="tray pow-col well"><button class="tile cmd pow" type="button" data-ready style="--fill:30%"><span class="pow-sweep"></span><span class="cmd-key">Q</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 19h20"/><path d="M7 19v-2.5h10V19"/></svg><span class="cmd-cost" style="color:#fff">1/3</span></button><button class="tile cmd pow" type="button" style="--fill:70%"><span class="pow-sweep"></span><span class="cmd-key">E</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M9.5 1.5h5L13.2 16h-2.4z"/></svg><span class="cmd-cost" style="color:#fff">45s</span></button></div>
+        <div class="tray well">
+          <button class="tile cmd" type="button"><span class="cmd-key">1</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="13" width="14" height="7"/><rect x="8" y="9" width="8" height="5"/></svg><span class="cmd-cost">100</span></button>
+          <button class="tile cmd" type="button"><span class="cmd-key">2</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 20h16"/><path d="M8 20l2-8h4l2 8"/></svg><span class="cmd-cost">150</span></button>
+          <button class="tile cmd" type="button"><span class="cmd-key">3</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="2.5"/><circle cx="12" cy="12" r="6"/></svg><span class="cmd-cost">120</span></button>
+          <button class="tile cmd" type="button" aria-disabled="true"><span class="cmd-key">4</span><svg class="tile-art" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h18M3 11h18"/></svg><span class="cmd-cost">225</span></button>
+          <button class="tile cmd" type="button"><span class="cmd-key">5</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="6" width="16" height="13"/></svg><span class="cmd-cost">200</span></button>
+          <button class="tile cmd" type="button" aria-pressed="true"><span class="cmd-key">6</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 15h8M8 12h8M9 9h6"/></svg><span class="cmd-cost">160</span></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODAL ============ -->
+  <section class="grid">
+    <div>
+      <h2 class="sec">Pause modal</h2>
+      <div class="sm-hud" style="position:relative;height:330px;border:1px solid var(--line-faint);background:#3a2a1c">
+        <div class="modal-backdrop">
+          <div class="panel modal" role="dialog" aria-label="Paused">
+            <h2 class="modal-title">Paused</h2>
+            <p class="modal-sub">Tactical hold · all units standing by</p>
+            <div class="modal-actions">
+              <button class="btn btn-primary" type="button">Resume</button>
+              <button class="btn btn-secondary" type="button">Restart mission</button>
+              <button class="btn btn-secondary btn-danger" type="button">Quit to menu</button>
+            </div>
+            <label class="check" style="margin-top:18px"><input class="sr-only" type="checkbox" checked><span class="check-box"></span>Sound</label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <h2 class="sec">Victory modal</h2>
+      <div class="sm-hud" style="position:relative;height:430px;border:1px solid var(--line-faint);background:#3a2a1c">
+        <div class="modal-backdrop">
+          <div class="panel modal" role="dialog" aria-label="Victory">
+            <h2 class="modal-title" style="background:linear-gradient(180deg,#fff3d6,#f7c06e 55%,#b9781e);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none;filter:drop-shadow(0 0 10px rgba(255,157,42,.55))">Victory</h2>
+            <p class="modal-sub" style="color:var(--gold-200)">Sector secured · the line held</p>
+            <dl class="rows" style="margin-bottom:24px;text-align:left">
+              <div class="row"><dt>Waves</dt><dd>15 / 15</dd></div>
+              <div class="row"><dt>Lives remaining</dt><dd>20</dd></div>
+              <div class="row"><dt>Mission time</dt><dd>14:02</dd></div>
+            </dl>
+            <div class="modal-actions" style="grid-template-columns:1fr 1fr">
+              <button class="btn btn-primary" type="button">Main menu</button>
+              <button class="btn btn-secondary" type="button">Retry</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
