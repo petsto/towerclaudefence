@@ -32,4 +32,3 @@ export const ICON_PAUSE = svg('<path d="M8 5v14M16 5v14" stroke-width="3"/>');
 export const ICON_PLAY = svg('<path d="M7 4l13 8-13 8z" fill="currentColor"/>');
 export const ICON_SOUND = svg('<path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor" fill-opacity=".3"/><path d="M16 8c2 2 2 6 0 8M19 5c4 4 4 10 0 14"/>');
 export const ICON_MUTED = svg('<path d="M3 9h4l5-4v14l-5-4H3z" fill="currentColor" fill-opacity=".3"/><path d="M16 9l6 6M22 9l-6 6"/>');
-export const ICON_COMMS = svg('<path d="M12 13v8M8 21h8"/><circle cx="12" cy="11" r="2" fill="currentColor"/><path d="M8 7a6 6 0 0 0 0 8M16 7a6 6 0 0 1 0 8M5 4a10 10 0 0 0 0 14M19 4a10 10 0 0 1 0 14"/>');

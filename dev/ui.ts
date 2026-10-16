@@ -56,6 +56,7 @@ function play(cfg: SimConfig): void {
   // Dev-only shortcuts poke the sim's mutable state directly.
   const devbar = document.createElement('div');
   devbar.id = 'devbar';
+  devbar.style.cssText = 'right: 8px; flex-wrap: wrap;'; // wrap at phone width instead of widening the page
   for (const [label, fn] of [
     ['bot on/off', () => (botOn = !botOn)],
     ['select next tower', () => hud.selectTower(state.towers[pick++ % Math.max(1, state.towers.length)]?.id ?? null)],
@@ -63,6 +64,7 @@ function play(cfg: SimConfig): void {
     ['leak', () => (state.lives = Math.max(1, state.lives - 3))],
     ['victory', () => (state.status = 'victory')],
     ['defeat', () => (state.lives = 0)],
+    ['50-wave run', () => { stop(); play({ ...cfg, waveCount: 50 }); }],
   ] as const) {
     const b = document.createElement('button');
     b.textContent = label;
@@ -70,6 +72,8 @@ function play(cfg: SimConfig): void {
     devbar.append(b);
   }
   document.body.append(devbar);
+  const hudTop = ui.querySelector<HTMLElement>('.hud-top');
+  if (import.meta.env.DEV) Object.assign(window, { __game: game });
 
   let raf = 0;
   let last = performance.now();
@@ -89,6 +93,9 @@ function play(cfg: SimConfig): void {
       else if (ev.type === 'leak') hud.leak();
     }
     hud.update(state);
+    // keep the dev bar just under the HUD top bar (its height changes with the boss bar and breakpoints)
+    const top = `${(hudTop?.offsetHeight ?? 50) + 4}px`;
+    if (devbar.style.top !== top) devbar.style.top = top;
   }
   raf = requestAnimationFrame(frame);
 

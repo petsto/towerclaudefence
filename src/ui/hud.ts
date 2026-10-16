@@ -5,11 +5,12 @@ import { ENEMIES } from '../data/enemies';
 import { MAPS } from '../data/maps';
 import { POWERS, POWER_LIST } from '../data/powers';
 import { TOWERS, TOWER_LIST } from '../data/towers';
-import type { EnemyId, PowerDef, PowerId, TargetingMode, TowerDef, TowerId, TowerLevel } from '../data/types';
+import type { EnemyId, PowerDef, PowerId, TargetingMode, TowerDef, TowerId, TowerLevel, WaveDef } from '../data/types';
+import { buildWaves, HEAVY_ONLY_FROM, hpExponent } from '../data/waves';
 import { earlyCallBonus } from '../sim';
 import type { Command, CommandResult, GameState, GameStatus, PowerState, TowerState } from '../sim/types';
-import { cap, dlRows, fmtInt, h, setAttr, setText } from './dom';
-import { ICON_COMMS, ICON_CREDITS, ICON_LIVES, ICON_MUTED, ICON_PAUSE, ICON_PLAY, ICON_SOUND, POWER_ICONS, TOWER_ICONS } from './icons';
+import { badge, cap, fmtInt, h, prefersReducedMotion, rankTone, setAttr, setText } from './dom';
+import { ICON_CREDITS, ICON_LIVES, ICON_MUTED, ICON_PAUSE, ICON_PLAY, ICON_SOUND, POWER_ICONS, TOWER_ICONS } from './icons';
 
 export interface HudOptions {
   dispatch(cmd: Command): CommandResult;
@@ -26,13 +27,16 @@ export interface HudOptions {
   onRestart(): void;
 }
 
+export type FlashKind = 'info' | 'warn' | 'good';
+
 export interface Hud {
   update(state: GameState): void;
   selectTower(towerId: number | null): void;
   selectBuild(defId: TowerId | null): void;
   selectPower(power: PowerId | null): void;
   floatText(screenX: number, screenY: number, text: string, kind: 'cash' | 'damage'): void;
-  flash(message: string): void;
+  /** Toast: 'info' (default, gold), 'warn' (red: boss waves) or 'good' (green: wave cleared). */
+  flash(message: string, kind?: FlashKind): void;
   /** Red screen-edge pulse (an enemy reached the core). */
   leak(): void;
   destroy(): void;
@@ -81,13 +85,13 @@ function upgradeDelta(a: TowerLevel, b: TowerLevel): string {
 }
 
 function btn(cls: string, label: string, ...children: (Node | string)[]): HTMLButtonElement {
-  const b = h('button', `btn ${cls}`, { type: 'button', 'aria-label': label, title: label }, ...children);
+  const b = h('button', cls, { type: 'button', 'aria-label': label, title: label }, ...children);
   // mouse clicks shouldn't leave focus on the button (Space would re-click it instead of calling the wave)
   b.addEventListener('pointerup', () => b.blur());
   return b;
 }
 
-function icon(svg: string, cls = 'ico'): HTMLSpanElement {
+function icon(svg: string, cls: string): HTMLSpanElement {
   const s = h('span', cls);
   s.innerHTML = svg;
   return s;
@@ -96,11 +100,16 @@ function icon(svg: string, cls = 'ico'): HTMLSpanElement {
 /** The sim leaves the countdown at exactly WAVE_COUNTDOWN while it holds for the field to clear. */
 const held = (s: GameState): boolean => s.nextWaveIn === WAVE_COUNTDOWN && s.enemies.length > 0;
 
-function row(label: string): [HTMLElement, HTMLElement, HTMLElement] {
-  const k = h('dt', '', {}, label);
-  const v = h('dd');
-  return [h('div', 'stat', {}, k, v), v, k];
+/** Label-over-value stat (`.stat-k` / `.stat-v`). Returns [stat, value, label]. */
+function stat(label: string, cls = ''): [HTMLElement, HTMLElement, HTMLElement] {
+  const k = h('dt', 'stat-k', {}, label);
+  const v = h('dd', 'stat-v num');
+  return [h('div', `stat ${cls}`, {}, k, v), v, k];
 }
+
+/** `<dl class="rows">` rows (end-screen stats). */
+const rows = (pairs: readonly [string, string][]): HTMLElement =>
+  h('dl', 'rows', {}, ...pairs.map(([k, v]) => h('div', 'row', {}, h('dt', '', {}, k), h('dd', '', {}, v))));
 
 /** Info / tooltip on hover and focus; leave clears only if focus has gone too. */
 function hoverable(b: HTMLButtonElement, set: (on: boolean) => void): void {
@@ -111,6 +120,7 @@ function hoverable(b: HTMLButtonElement, set: (on: boolean) => void): void {
 }
 
 const secsLeft = (def: PowerDef, p: PowerState): number => Math.ceil(def.chargeTime - p.charge);
+const two = (n: number): string => String(n).padStart(2, '0');
 
 export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   let state: GameState | null = null;
@@ -123,108 +133,121 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   let lastFrame = performance.now();
   let lastStatus: GameStatus | null = null;
   let incomingKey = '';
-  let portraitKey = '';
+  let headKey = '';
   let muted = opts.muted;
+  // the run's resolved wave list (GDD §15), rebuilt only if the run changes
+  let wavesKey = '';
+  let waves: readonly WaveDef[] = [];
+  let tickEls: { el: HTMLElement; wave: number }[] = [];
 
   // ---------- top bar
-  const cashV = h('span', 'num');
-  const livesV = h('span', 'num');
-  const waveV = h('span', 'num');
-  const nextV = h('span', 'num');
-  const speedB = btn('btn-sq btn-speed', 'Game speed (F)');
-  const pauseB = btn('btn-sq', 'Pause (P)');
-  const muteB = btn('btn-sq', 'Mute');
-  const livesBox = h('div', 'res res-lives', { title: 'Lives' }, icon(ICON_LIVES), livesV);
-  const missionV = h('span');
-  const top = h(
+  const missionV = h('span', 'res-label hud-mission');
+  const waveNum = h('span', 'res-val num wave-num');
+  const waveOf = h('span', 'res-label wave-of');
+  const customTag = h('span', 'chip wave-custom', { hidden: true, title: 'Custom run length' }, 'Custom');
+  const nextV = h('span', 'res-val num next-v');
+  const waveStatus = h('span', 'sr-only', { role: 'status' });
+  const waveFill = h('div', 'bar-fill');
+  const waveBar = h('div', 'bar wave-bar', {}, waveFill);
+  const wavePanel = h(
     'div',
-    'hud-top',
+    'panel hud-wave',
     {},
-    h('div', 'panel hud-mission', {}, missionV),
     h(
       'div',
-      'panel hud-res',
+      'wave-line',
       {},
-      h('div', 'res res-cash', { title: 'Credits' }, icon(ICON_CREDITS), cashV),
-      livesBox,
-      h('div', 'res', {}, h('span', 'res-label', {}, 'WAVE'), waveV),
-      h('div', 'res', {}, h('span', 'res-label', {}, 'NEXT'), nextV),
-      h('div', 'res-btns', {}, speedB, pauseB, muteB),
+      h('span', 'wave-id', {}, h('span', 'res-label', {}, 'Wave'), waveNum, waveOf, customTag),
+      h('span', 'wave-next', {}, h('span', 'res-label', {}, 'Next'), nextV),
     ),
-  );
-
-  // ---------- console: wave panel
-  const waveTitle = h('div', 'wp-title');
-  const waveStatus = h('div', 'wp-status');
-  const incoming = h('div', 'wp-incoming');
-  const callLabel = h('span', 'call-label');
-  const callBonus = h('span', 'call-bonus');
-  const callB = btn('btn-call', 'Call wave (Space)', callLabel, callBonus, h('kbd', '', {}, 'SPACE'));
-  const wavePanel = h(
-    'section',
-    'screen scanlines con-wave',
-    { 'aria-label': 'Wave status' },
-    waveTitle,
+    waveBar,
     waveStatus,
-    incoming,
-    callB,
   );
 
-  // ---------- console: portrait
-  const portraitGlyph = h('div', 'portrait-glyph');
-  const portraitCap = h('div', 'portrait-cap');
-  const portrait = h('div', 'screen scanlines con-portrait', { 'aria-hidden': 'true' }, h('div', 'static'), portraitGlyph, portraitCap);
+  const cashV = h('span', 'res-val num');
+  const livesV = h('span', 'res-val num');
+  const livesBox = h('div', 'res res-lives', { title: 'Lives' }, icon(ICON_LIVES, 'res-ico'), livesV);
+  const speedB = btn('btn btn-secondary btn-icon btn-speed', 'Game speed (F)');
+  const pauseB = btn('btn btn-secondary btn-icon', 'Pause menu (P)');
+  const muteB = btn('btn btn-secondary btn-icon btn-mute', 'Mute');
+  const resPanel = h(
+    'div',
+    'panel hud-res',
+    {},
+    h('div', 'res res-credits', { title: 'Credits' }, icon(ICON_CREDITS, 'res-ico'), cashV),
+    livesBox,
+    h('div', 'res-btns', {}, speedB, pauseB, muteB),
+  );
+
+  // boss bar: row 2 of the top bar while a boss is alive
+  const bossName = h('span', 'boss-name');
+  const bossNums = h('span', 'boss-nums num');
+  const bossHp = h('div', 'bar-fill');
+  const bossShield = h('div', 'bar-fill');
+  const bossShieldBar = h('div', 'bar bar-shield', {}, bossShield);
+  const bossBar = h(
+    'div',
+    'panel hud-boss',
+    { hidden: true, role: 'status' },
+    h('div', 'boss-head', {}, bossName, bossNums),
+    h('div', 'bar bar-danger boss-hp', {}, bossHp),
+    bossShieldBar,
+  );
+
+  const top = h('div', 'hud-top', {}, h('div', 'panel hud-left', {}, missionV), wavePanel, resPanel, bossBar);
+
+  // ---------- console: incoming contacts + call wave
+  const incoming = h('div', 'incoming');
+  const waveWell = h(
+    'section',
+    'well con-wave',
+    { 'aria-label': 'Next contacts' },
+    h('div', 'res-label', {}, 'Next contacts'),
+    incoming,
+  );
+  const callLabel = h('span', 'call-label');
+  const callBonus = h('span', 'call-bonus num');
+  const callB = btn('btn btn-primary con-call', 'Call wave (Space)', callLabel, callBonus, h('kbd', '', {}, 'SPACE'));
 
   // ---------- console: info panel (three mutually exclusive views)
   const idleView = h(
     'div',
     'info-idle',
     {},
-    h('div', 'info-name', {}, 'No structure selected'),
-    h('p', '', {}, 'Choose a structure from the command card [1–6], then deploy it on a build pad.'),
+    h('div', 'tip-title', {}, 'No structure selected'),
+    h('p', 'hint-keys', {}, 'Choose a structure from the command card [1–6], then deploy it on a build pad.'),
     h('p', 'dim', {}, 'Q mines · E Lance strike. Click a structure to inspect it. ESC cancels. P pauses.'),
   );
 
-  const tName = h('div', 'info-name');
-  const tPips = h('span', 'pips');
-  const tType = h('span', 'dtype');
-  const [rDmgRow, rDmg] = row('DMG');
-  const [rRateRow, rRate] = row('RATE');
-  const [rRngRow, rRng] = row('RANGE');
-  const [rDealtRow, rDealt] = row('DEALT');
-  const [rKillsRow, rKills] = row('KILLS');
+  const tIcon = h('span', 'info-ico');
+  const tLevel = badge('1', 'blue', 24);
+  const tName = h('span', 'tip-title');
+  const tType = h('span', 'chip');
+  const [sDmg, rDmg] = stat('DMG');
+  const [sRate, rRate] = stat('RATE');
+  const [sRng, rRng] = stat('RANGE');
+  const [sDealt, rDealt] = stat('DEALT', 'stat-extra');
+  const [sKills, rKills] = stat('KILLS', 'stat-extra');
   const tSpecial = h('div', 'info-special');
-  const targetV = h('span', 'tgt-v');
-  const targetB = btn('btn-act', 'Cycle targeting (Tab)', h('span', 'act-k', {}, 'TARGET'), targetV, h('kbd', '', {}, 'TAB'));
-  const upCost = h('span', 'cost');
-  const upDelta = h('span', 'delta');
-  const upB = btn('btn-act btn-up', 'Upgrade (U)', h('span', 'act-k', {}, 'UPGRADE'), upCost, h('kbd', '', {}, 'U'));
-  const sellV = h('span', 'cost refund');
-  const sellB = btn('btn-act btn-sell', 'Sell (X)', h('span', 'act-k', {}, 'SELL'), sellV, h('kbd', '', {}, 'X'));
+  const upDelta = h('div', 'info-delta');
   const towerView = h(
     'div',
     'info-tower',
     {},
-    h(
-      'div',
-      'info-main',
-      {},
-      h('div', 'info-head', {}, tName, tPips, tType),
-      h('dl', 'stats', {}, rDmgRow, rRateRow, rRngRow, rDealtRow, rKillsRow),
-      tSpecial,
-      upDelta,
-    ),
-    h('div', 'info-actions', {}, targetB, upB, sellB),
+    h('div', 'info-head', {}, tIcon, tLevel, tName, tType),
+    h('dl', 'stats', {}, sDmg, sRate, sRng, sDealt, sKills),
+    tSpecial,
+    upDelta,
   );
 
-  const tipName = h('div', 'info-name');
-  const tipCost = h('span', 'cost');
-  const tipType = h('span', 'dtype');
+  const tipName = h('span', 'tip-title');
+  const tipCost = h('span', 'tip-cost num');
+  const tipType = h('span', 'chip');
   const tipKey = h('kbd');
   const tipDesc = h('p', 'tip-desc');
-  const [tdRow, tdV, tdK] = row('DMG');
-  const [trRow, trV, trK] = row('RATE');
-  const [tgRow, tgV, tgK] = row('RANGE');
+  const [tdRow, tdV, tdK] = stat('DMG');
+  const [trRow, trV, trK] = stat('RATE');
+  const [tgRow, tgV, tgK] = stat('RANGE');
   const tipSpecial = h('div', 'info-special');
   const tipHint = h('div', 'tip-hint');
   const tipView = h(
@@ -233,23 +256,36 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     {},
     h('div', 'info-head', {}, tipName, tipCost, tipType, tipKey),
     tipDesc,
-    h('dl', 'stats', {}, tdRow, trRow, tgRow),
-    tipSpecial,
+    h('div', 'tip-row', {}, h('dl', 'stats', {}, tdRow, trRow, tgRow), tipSpecial),
     tipHint,
   );
 
-  const info = h('section', 'screen con-info', { 'aria-label': 'Selection', 'aria-live': 'polite' }, idleView, towerView, tipView);
+  const info = h('section', 'well con-info', { 'aria-label': 'Selection', 'aria-live': 'polite' }, idleView, towerView, tipView);
 
-  // ---------- console: command card
+  // ---------- console: tower actions (visible only with a tower selected)
+  const act = (label: string, value: HTMLElement, key: string): (Node | string)[] => [
+    h('span', 'act-k', {}, label),
+    value,
+    h('kbd', '', {}, key),
+  ];
+  const targetV = h('span', 'act-v tgt-v');
+  const targetB = btn('btn btn-secondary btn-act', 'Cycle targeting (Tab)', ...act('Target', targetV, 'TAB'));
+  const upCost = h('span', 'act-v cost num');
+  const upB = btn('btn btn-secondary btn-act', 'Upgrade (U)', ...act('Upgrade', upCost, 'U'));
+  const sellV = h('span', 'act-v refund num');
+  const sellB = btn('btn btn-secondary btn-danger btn-act', 'Sell (X)', ...act('Sell', sellV, 'X'));
+  const actions = h('section', 'con-actions', { 'aria-label': 'Structure orders' }, targetB, upB, sellB);
+
+  // ---------- console: build tray
   const cards = new Map<TowerId, { b: HTMLButtonElement; def: TowerDef }>();
-  const cardGrid = h('div', 'cmd-grid', { role: 'toolbar', 'aria-label': 'Build structures' });
+  const cmdTray = h('section', 'well con-cmd', { role: 'toolbar', 'aria-label': 'Build structures' });
   for (const def of TOWER_LIST) {
     const b = btn(
-      'cmd',
+      'tile cmd',
       `${def.name}, ${def.levels[0].cost} credits (${def.hotkey})`,
       h('span', 'cmd-key', {}, def.hotkey),
-      icon(TOWER_ICONS[def.id], 'cmd-ico'),
-      h('span', 'cmd-cost', {}, String(def.levels[0].cost)),
+      icon(TOWER_ICONS[def.id], 'cmd-ico tile-art'),
+      h('span', 'cmd-cost num', {}, String(def.levels[0].cost)),
     );
     b.addEventListener('click', () => clickBuild(def));
     hoverable(b, (on) => {
@@ -257,23 +293,22 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       else if (hoverBuild === def.id) hoverBuild = null;
     });
     cards.set(def.id, { b, def });
-    cardGrid.append(b);
+    cmdTray.append(b);
   }
-  const cmdCard = h('section', 'con-cmd', { 'aria-label': 'Command card' }, cardGrid);
 
-  // ---------- console: command powers (GDD §14), a 1×2 column in the command tray
+  // ---------- console: command powers (GDD §14), a 1×2 column joined to the build tray
   const powBtns = new Map<PowerId, { b: HTMLButtonElement; def: PowerDef; readyEl: HTMLElement; countEl: HTMLElement }>();
-  const powGrid = h('div', 'pow-grid', { role: 'toolbar', 'aria-label': 'Command powers' });
+  const powTray = h('section', 'well con-pow', { role: 'toolbar', 'aria-label': 'Command powers' });
   for (const def of POWER_LIST) {
     const readyEl = h('span', 'pow-ready');
-    const countEl = h('span', 'cmd-cost pow-count');
+    const countEl = h('span', 'cmd-cost num pow-count');
     const key = def.hotkey.toUpperCase();
     const b = btn(
-      'cmd pow',
+      'tile cmd pow',
       `${def.name} (${key})`,
       h('span', 'pow-sweep'),
       h('span', 'cmd-key', {}, key),
-      icon(POWER_ICONS[def.id], 'cmd-ico'),
+      icon(POWER_ICONS[def.id], 'cmd-ico tile-art'),
       readyEl,
       countEl,
     );
@@ -283,34 +318,18 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       else if (hoverPower === def.id) hoverPower = null;
     });
     powBtns.set(def.id, { b, def, readyEl, countEl });
-    powGrid.append(b);
+    powTray.append(b);
   }
-  const powCard = h('section', 'con-pow', { 'aria-label': 'Command powers' }, powGrid);
 
-  const consoleEl = h('div', 'panel hud-console', {}, wavePanel, portrait, info, powCard, cmdCard);
+  const consoleEl = h('div', 'panel hud-console', { 'data-mode': 'idle' }, waveWell, callB, info, actions, powTray, cmdTray);
 
   // ---------- transient layers
   const flashEl = h('div', 'hud-flash', { role: 'status', 'aria-live': 'assertive' });
   const floatLayer = h('div', 'hud-floats', { 'aria-hidden': 'true' });
   const floats = Array.from({ length: FLOAT_POOL }, () => floatLayer.appendChild(h('span', 'float')));
   let floatNext = 0;
-  const overlay = h('div', 'hud-overlay', { hidden: true });
+  const overlay = h('div', 'modal-backdrop', { hidden: true });
   const vignette = h('div', 'hud-vignette', { 'aria-hidden': 'true' });
-
-  // ---------- boss bar (in the top bar while a boss is alive: between its panels when wide, else its own row below them)
-  const bossName = h('span', 'boss-name');
-  const bossNums = h('span', 'boss-nums');
-  const bossHp = h('div', 'boss-fill boss-hp');
-  const bossShield = h('div', 'boss-fill boss-shield');
-  const bossBar = h(
-    'div',
-    'panel hud-boss',
-    { hidden: true, role: 'status' },
-    h('div', 'boss-head', {}, bossName, bossNums),
-    h('div', 'boss-track', {}, bossHp),
-    h('div', 'boss-track boss-track-shield', {}, bossShield),
-  );
-  top.insertBefore(bossBar, top.lastElementChild);
 
   const hud = h('div', 'sm-hud', {}, vignette, top, floatLayer, flashEl, consoleEl, overlay);
   root.append(hud);
@@ -392,23 +411,29 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     send({ type: 'setSpeed', speed: state.speed === 3 ? 1 : ((state.speed + 1) as 2 | 3) });
   }
 
+  function toggleMute(): void {
+    muted = opts.onToggleMute();
+    renderMute();
+  }
+
   const callWave = (): void => void send({ type: 'callWave' });
 
   speedB.addEventListener('click', cycleSpeed);
   pauseB.addEventListener('click', togglePause);
-  muteB.addEventListener('click', () => {
-    muted = opts.onToggleMute();
-    renderMute();
-  });
+  muteB.addEventListener('click', toggleMute);
   callB.addEventListener('click', callWave);
   targetB.addEventListener('click', cycleTargeting);
   upB.addEventListener('click', upgrade);
   sellB.addEventListener('click', sell);
 
+  /** The pause modal's Sound checkbox, while the modal is open. */
+  let soundBox: HTMLInputElement | null = null;
   function renderMute(): void {
     muteB.innerHTML = muted ? ICON_MUTED : ICON_SOUND;
     setAttr(muteB, 'aria-pressed', String(muted));
     muteB.title = muted ? 'Unmute' : 'Mute';
+    setAttr(muteB, 'aria-label', muteB.title);
+    if (soundBox) soundBox.checked = !muted;
   }
   renderMute();
 
@@ -463,6 +488,27 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
   window.addEventListener('keydown', onKey);
 
   // ---------- rendering
+  /** Resolve the run's waves once per run and lay the boss / heavy ticks on the wave bar. */
+  function syncWaves(s: GameState): void {
+    const key = `${s.mapId}:${s.waveCount}`;
+    if (key === wavesKey) return;
+    wavesKey = key;
+    const map = MAPS[s.mapId];
+    waves = buildWaves(map, s.waveCount);
+    const n = waves.length;
+    // a tick after each boss wave, plus one where the heavy phase starts (unless a boss tick is already there)
+    const marks = waves.flatMap((w, i) => (w.boss ? [i + 1] : []));
+    if (n >= HEAVY_ONLY_FROM && !waves[HEAVY_ONLY_FROM - 2]?.boss) marks.push(HEAVY_ONLY_FROM - 1);
+    for (const t of tickEls) t.el.remove();
+    tickEls = marks.map((wave) => {
+      const el = h('i', 'bar-tick', { style: `left:${((100 * wave) / n).toFixed(2)}%` });
+      waveBar.append(el);
+      return { el, wave };
+    });
+    setText(waveOf, `/ ${two(n)}`);
+    customTag.hidden = n === map.waves.length; // ponytail: a custom run at the campaign length is the campaign
+  }
+
   function renderTop(s: GameState, dt: number): void {
     if (shownCash < 0) shownCash = s.cash;
     const diff = s.cash - shownCash;
@@ -470,49 +516,60 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     shownCash = Math.abs(diff) < 1 ? s.cash : shownCash + Math.sign(diff) * Math.max(1, Math.abs(diff) * Math.min(1, dt * 8));
     setText(cashV, fmtInt(shownCash));
     setText(livesV, String(s.lives));
-    livesBox.classList.toggle('low', s.lives <= 5);
-    const w = String(Math.max(0, s.waveIndex + 1)).padStart(2, '0');
-    setText(waveV, `${w}/${String(s.waveCount).padStart(2, '0')}`);
-    setText(nextV, s.nextWaveIn === null ? '--' : held(s) ? 'HOLD' : `0:${String(Math.ceil(s.nextWaveIn)).padStart(2, '0')}`);
+    livesBox.classList.toggle('is-low', s.lives <= 5);
     setText(speedB, `${s.speed}×`);
     const paused = s.status === 'paused';
     if (pauseB.dataset.paused !== String(paused)) {
       pauseB.dataset.paused = String(paused);
       pauseB.innerHTML = paused ? ICON_PLAY : ICON_PAUSE;
-      pauseB.title = paused ? 'Resume (P)' : 'Pause (P)';
+      pauseB.title = paused ? 'Resume (P)' : 'Pause menu (P)';
       setAttr(pauseB, 'aria-label', pauseB.title);
     }
     setText(missionV, `${MAPS[s.mapId].name} · ${DIFFICULTIES[s.difficultyId].name}`);
+
+    // wave readout + bar
+    const cur = waves[Math.max(0, s.waveIndex)];
+    setText(waveNum, two(Math.max(0, s.waveIndex + 1)));
+    const tone = s.waveIndex < 0 ? '' : s.waveIndex === s.waveCount - 1 ? 'final' : cur?.boss ? 'boss' : '';
+    if (waveNum.dataset.tone !== tone) waveNum.dataset.tone = tone;
+    const t = s.nextWaveIn;
+    const hold = t !== null && held(s);
+    setText(nextV, t === null ? '--' : hold ? 'HOLD' : `${Math.floor(Math.ceil(t) / 60)}:${two(Math.ceil(t) % 60)}`);
+    nextV.classList.toggle('is-hold', hold);
+    // cleared ≈ launched, minus the latest wave while it still spawns or has enemies up
+    const cleared = s.status === 'victory' ? s.waveCount : Math.max(0, s.waveIndex + 1 - (s.waveActive || s.enemies.length ? 1 : 0));
+    const w = `${((100 * cleared) / s.waveCount).toFixed(2)}%`;
+    if (waveFill.style.width !== w) waveFill.style.width = w;
+    for (const tk of tickEls) tk.el.classList.toggle('is-past', cleared >= tk.wave);
+
+    let status: string;
+    if (s.waveIndex < 0) status = 'Standing by · build defenses';
+    else if (s.waveActive) status = 'Hostiles inbound';
+    else if (hold) status = 'Next wave on hold · clear the field';
+    else if (t !== null) status = `Next wave in ${Math.ceil(t)}s`;
+    else if (s.waveIndex + 1 >= s.waveCount) status = 'Final wave · hold the line';
+    else status = 'Awaiting orders';
+    if (wavePanel.title !== status) {
+      wavePanel.title = status;
+      waveStatus.textContent = status;
+    }
   }
 
   function renderWave(s: GameState): void {
-    const n = s.waveIndex + 1;
-    setText(waveTitle, `WAVE ${String(Math.max(0, n)).padStart(2, '0')} / ${s.waveCount}`);
-    const left = s.waveIndex + 1 >= s.waveCount;
-    let status: string;
-    if (s.waveIndex < 0) status = 'STANDING BY · BUILD DEFENSES';
-    else if (s.waveActive) status = 'HOSTILES INBOUND';
-    else if (s.nextWaveIn !== null && held(s)) status = 'NEXT WAVE ON HOLD · CLEAR THE FIELD';
-    else if (s.nextWaveIn !== null) status = `NEXT WAVE  T-${Math.ceil(s.nextWaveIn)}s`;
-    else if (left) status = 'FINAL WAVE · HOLD THE LINE';
-    else status = 'AWAITING ORDERS';
-    setText(waveStatus, status);
-
-    const key = `${s.mapId}:${s.waveIndex}`;
+    const key = `${wavesKey}:${s.waveIndex}`;
     if (key !== incomingKey) {
       incomingKey = key;
-      const next = MAPS[s.mapId].waves[s.waveIndex + 1];
-      if (!next) incoming.replaceChildren(h('span', 'dim', {}, 'NO FURTHER CONTACTS'));
+      const next = waves[s.waveIndex + 1];
+      if (!next) incoming.replaceChildren(h('span', 'dim', {}, 'No further contacts'));
       else {
         const ids = [...new Set(next.groups.map((g) => g.enemyId))] as EnemyId[];
         incoming.replaceChildren(
-          h('span', 'wp-next', {}, 'NEXT ▸'),
           ...ids.map((id) => {
             const e = ENEMIES[id];
             const count = next.groups.filter((g) => g.enemyId === id).reduce((a, g) => a + g.count, 0);
             return h(
               'span',
-              `foe foe-${e.faction}${e.isBoss ? ' foe-boss' : ''}`,
+              `chip foe foe-${e.faction}${e.isBoss ? ' foe-boss' : ''}`,
               { title: `${e.name} · ${cap(e.size)}${e.shield ? ' · shielded' : ''}` },
               `${count}× ${e.name}`,
               h('em', '', {}, e.size[0]!.toUpperCase()),
@@ -522,10 +579,12 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       }
     }
 
-    setText(callLabel, s.waveIndex < 0 ? 'BEGIN ASSAULT' : 'CALL WAVE');
+    const first = s.waveIndex < 0;
+    setText(callLabel, first ? 'Begin assault' : 'Call wave');
+    callB.classList.toggle('is-pulsing', first);
     const bonus = earlyCallBonus(s.nextWaveIn, s.difficultyId);
     setText(callBonus, bonus > 0 ? `+${bonus} cr` : '');
-    const disabled = left || s.status !== 'playing';
+    const disabled = s.waveIndex + 1 >= s.waveCount || s.status !== 'playing';
     if (callB.disabled !== disabled) callB.disabled = disabled;
   }
 
@@ -579,8 +638,9 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       setText(tgV, String(def.fieldRadius));
       setText(tipSpecial, `Stores ${def.maxCharges} · lane tiles only · bosses slowed ${Math.round(def.slow * BOSS_SLOW_FACTOR * 100)}%`);
     } else {
-      // pulse damage scales with the map's HP growth, like the enemies it hits
-      const dmg = Math.round(def.pulseDamage * MAPS[s.mapId].hpGrowth ** Math.max(0, s.waveIndex));
+      // pulse damage scales with the map's HP growth, like the enemies it hits (GDD §15: hpExponent past the authored waves)
+      const map = MAPS[s.mapId];
+      const dmg = Math.round(def.pulseDamage * map.hpGrowth ** hpExponent(Math.max(0, s.waveIndex), map.waves.length));
       setText(tipType, cap(def.damageType));
       tipType.dataset.type = def.damageType;
       setText(trK, 'DMG');
@@ -619,8 +679,16 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     const def = TOWERS[t.defId];
     const l = def.levels[t.level - 1]!;
     const next = def.levels[t.level as number];
+    const hk = `${t.defId}:${t.level}`;
+    if (hk !== headKey) {
+      headKey = hk;
+      tIcon.innerHTML = TOWER_ICONS[t.defId];
+      const tone = rankTone(t.level);
+      tLevel.className = tone === 'blue' ? 'badge' : `badge badge-${tone}`;
+      tLevel.textContent = String(t.level);
+      tLevel.title = `Level ${t.level}`;
+    }
     setText(tName, def.name);
-    setText(tPips, '◆'.repeat(t.level) + '◇'.repeat(3 - t.level));
     setText(tType, cap(def.damageType));
     tType.dataset.type = def.damageType;
     setText(rDmg, dmgText(l));
@@ -644,20 +712,14 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     const powId = tipDef ? null : (hoverPower ?? selPower);
     const powDef = powId ? POWERS[powId] : null;
     const mode = tipDef || powDef ? 'tip' : t ? 'tower' : 'idle';
+    if (consoleEl.dataset.mode !== mode) consoleEl.dataset.mode = mode;
     if (idleView.hidden !== (mode !== 'idle')) idleView.hidden = mode !== 'idle';
     if (towerView.hidden !== (mode !== 'tower')) towerView.hidden = mode !== 'tower';
     if (tipView.hidden !== (mode !== 'tip')) tipView.hidden = mode !== 'tip';
+    info.classList.toggle('tip', mode === 'tip');
     if (tipDef) renderTip(tipDef, !hoverBuild || hoverBuild === selBuild, s.cash);
     else if (powDef) renderPowerTip(powDef, powDef.id === selPower, s);
     else if (t) renderTower(t, s.cash);
-
-    const pk = tipDef ? `${tipDef.id}:0` : powDef ? powDef.id : t ? `${t.defId}:${t.level}` : 'idle';
-    if (pk !== portraitKey) {
-      portraitKey = pk;
-      portraitGlyph.innerHTML = tipDef ? TOWER_ICONS[tipDef.id] : powDef ? POWER_ICONS[powDef.id] : t ? TOWER_ICONS[t.defId] : ICON_COMMS;
-      portrait.classList.toggle('idle', pk === 'idle');
-      portraitCap.textContent = tipDef ? 'SCHEMATIC' : powDef ? 'ORBITAL' : t ? `MK ${'I'.repeat(t.level)}` : 'COMMS';
-    }
   }
 
   function renderBoss(s: GameState): void {
@@ -667,14 +729,14 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     setText(bossName, `${ENEMIES[b.defId].name}${b.midBoss ? ' · vanguard' : ''}`);
     setText(bossNums, b.maxShield > 0 ? `${fmtInt(b.hp)} HP · ${fmtInt(b.shield)} SH` : `${fmtInt(b.hp)} HP`);
     bossHp.style.width = `${(100 * Math.max(0, b.hp)) / b.maxHp}%`;
-    const track = bossShield.parentElement!;
-    if (track.hidden !== !(b.maxShield > 0)) track.hidden = !(b.maxShield > 0);
+    if (bossShieldBar.hidden !== !(b.maxShield > 0)) bossShieldBar.hidden = !(b.maxShield > 0);
     if (b.maxShield > 0) bossShield.style.width = `${(100 * Math.max(0, b.shield)) / b.maxShield}%`;
   }
 
   function renderOverlay(s: GameState): void {
     if (s.status === lastStatus) return;
     lastStatus = s.status;
+    soundBox = null;
     if (s.status === 'playing') {
       overlay.hidden = true;
       overlay.replaceChildren();
@@ -683,26 +745,30 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     const restart = (): void => opts.onRestart();
     let box: HTMLElement;
     if (s.status === 'paused') {
-      const resume = btn('btn-wide', 'Resume', 'Resume');
+      const resume = btn('btn btn-primary', 'Resume', 'Resume');
       resume.addEventListener('click', togglePause);
-      const rs = btn('btn-wide', 'Restart mission', 'Restart mission');
+      const rs = btn('btn btn-secondary', 'Restart mission', 'Restart mission');
       rs.addEventListener('click', restart);
-      const quit = btn('btn-wide btn-danger', 'Quit to menu', 'Quit to menu');
+      const quit = btn('btn btn-secondary btn-danger', 'Quit to menu', 'Quit to menu');
       quit.addEventListener('click', opts.onExitToMenu);
+      soundBox = h('input', 'sr-only', { type: 'checkbox' });
+      soundBox.checked = !muted;
+      soundBox.addEventListener('change', toggleMute);
       box = h(
         'div',
-        'panel ov-box',
+        'panel modal',
         { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Paused' },
-        h('h2', 'ov-title', {}, 'Paused'),
-        h('p', 'ov-sub', {}, 'Tactical hold · all units standing by'),
-        h('div', 'ov-btns', {}, resume, rs, quit),
+        h('h2', 'modal-title', {}, 'Paused'),
+        h('p', 'modal-sub', {}, 'Tactical hold · all units standing by'),
+        h('div', 'modal-actions', {}, resume, rs, quit),
+        h('label', 'check modal-sound', {}, soundBox, h('span', 'check-box'), 'Sound'),
       );
     } else {
       const win = s.status === 'victory';
       const kills = s.towers.reduce((a, t) => a + t.kills, 0);
       const dealt = s.towers.reduce((a, t) => a + t.totalDamage, 0);
       const mins = Math.floor(s.time / 60);
-      const secs = String(Math.floor(s.time % 60)).padStart(2, '0');
+      const secs = two(Math.floor(s.time % 60));
       const stats: [string, string][] = [
         ['Theatre', MAPS[s.mapId].name],
         ['Difficulty', DIFFICULTIES[s.difficultyId].name],
@@ -713,18 +779,19 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
         ['Damage dealt', fmtInt(dealt)],
         ['Mission time', `${mins}:${secs}`],
       ];
-      const retry = btn('btn-wide', 'Retry mission', 'Retry');
+      const retry = btn(`btn ${win ? 'btn-secondary' : 'btn-primary'}`, 'Retry mission', 'Retry');
       retry.addEventListener('click', restart);
-      const home = btn('btn-wide', 'Main menu', 'Main menu');
+      const home = btn(`btn ${win ? 'btn-primary' : 'btn-secondary'}`, 'Main menu', 'Main menu');
       home.addEventListener('click', opts.onExitToMenu);
       box = h(
         'div',
-        `panel ov-box ov-end ${win ? 'ov-win' : 'ov-lose'}`,
+        `panel modal modal-end ${win ? 'is-win' : 'is-lose'}`,
         { role: 'dialog', 'aria-modal': 'true', 'aria-label': win ? 'Victory' : 'Defeat' },
-        h('h2', 'ov-title', {}, win ? 'Victory' : 'Defeat'),
-        h('p', 'ov-sub', {}, win ? 'Sector secured · the line held' : 'Core breached · outpost lost'),
-        h('dl', 'screen scanlines ov-stats', {}, ...dlRows(stats)),
-        h('div', 'ov-btns ov-btns-row', {}, retry, home),
+        h('h2', 'modal-title', {}, win ? 'Victory' : 'Defeat'),
+        h('p', 'modal-sub', {}, win ? 'Sector secured · the line held' : 'Core breached · outpost lost'),
+        rows(stats),
+        // primary first: Main menu on victory, Retry on defeat
+        h('div', 'modal-actions modal-actions-row', {}, ...(win ? [home, retry] : [retry, home])),
       );
     }
     overlay.replaceChildren(box);
@@ -734,16 +801,19 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     (s.status === 'paused' ? box.querySelector('button') ?? box : box).focus({ preventScroll: true });
   }
 
-  // ---------- transient feedback
-  function flash(message: string): void {
+  // ---------- transient feedback (WAAPI ignores the CSS reduced-motion switch: opacity-only keyframes then)
+  function flash(message: string, kind: FlashKind = 'info'): void {
     flashEl.textContent = message;
+    flashEl.dataset.kind = kind;
     flashEl.getAnimations().forEach((a) => a.cancel());
+    const still = prefersReducedMotion();
+    const y = (px: number) => (still ? 'translate(-50%, 0)' : `translate(-50%, ${px}px)`);
     flashEl.animate(
       [
-        { opacity: 0, transform: 'translate(-50%, 6px)' },
-        { opacity: 1, transform: 'translate(-50%, 0)', offset: 0.08 },
-        { opacity: 1, transform: 'translate(-50%, 0)', offset: 0.8 },
-        { opacity: 0, transform: 'translate(-50%, 0)' },
+        { opacity: 0, transform: y(6) },
+        { opacity: 1, transform: y(0), offset: 0.08 },
+        { opacity: 1, transform: y(0), offset: 0.8 },
+        { opacity: 0, transform: y(0) },
       ],
       { duration: 2000, fill: 'forwards' },
     );
@@ -757,6 +827,12 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
     el.style.left = `${screenX}px`;
     el.style.top = `${screenY}px`;
     el.getAnimations().forEach((a) => a.cancel());
+    const timing = { duration: kind === 'damage' ? 650 : 1100, easing: 'ease-out', fill: 'forwards' } as const;
+    if (prefersReducedMotion()) {
+      el.style.transform = 'translate(-50%, -14px)';
+      el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], timing);
+      return;
+    }
     // pop in, hang, drift up and fade
     el.animate(
       [
@@ -766,7 +842,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
         { opacity: 1, transform: 'translate(-50%, -26px) scale(1)', offset: 0.7 },
         { opacity: 0, transform: 'translate(-50%, -40px) scale(0.95)' },
       ],
-      { duration: kind === 'damage' ? 650 : 1100, easing: 'ease-out', fill: 'forwards' },
+      timing,
     );
   }
 
@@ -781,6 +857,7 @@ export function createHud(root: HTMLElement, opts: HudOptions): Hud {
       const now = performance.now();
       const dt = (now - lastFrame) / 1000;
       lastFrame = now;
+      syncWaves(s);
       renderTop(s, dt);
       renderWave(s);
       renderCards(s);
