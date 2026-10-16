@@ -6,7 +6,7 @@
 //   overlay (layer OVERLAY_LAYER): airborne FX, HP bars, depth-tested against terrain, props and unit silhouettes
 // No real-time lights or shadows: both bakes carry the map's sun + hemi light.
 import * as THREE from 'three';
-import { ENEMIES, TOWER_LIST } from '../data';
+import { buildWaves, CUSTOM_WAVES_MAX, CUSTOM_WAVES_MIN, ENEMIES, TOWER_LIST } from '../data';
 import type { EnemyId, MapDef } from '../data/types';
 import type { GameState } from '../sim/types';
 import { createCameraRig, DEFAULT_PPU } from './camera';
@@ -29,7 +29,10 @@ export function mapEnemies(map: MapDef): EnemyId[] {
     const ab = ENEMIES[id].ability;
     if (ab && 'spawn' in ab) add(ab.spawn);
   };
-  for (const w of map.waves) for (const g of w.groups) add(g.enemyId);
+  // ponytail: bakes every enemy any wave count can spawn (a few extra cells); pass the run's waveCount if memory matters
+  const runs = [map.waves];
+  for (let n = CUSTOM_WAVES_MIN; n <= CUSTOM_WAVES_MAX; n++) runs.push(buildWaves(map, n));
+  for (const waves of runs) for (const w of waves) for (const g of w.groups) add(g.enemyId);
   return [...ids];
 }
 
