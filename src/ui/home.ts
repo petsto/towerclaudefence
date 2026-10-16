@@ -1,15 +1,24 @@
 import { DIFFICULTIES, DIFFICULTY_LIST } from '../data/difficulty';
 import { MAPS, MAP_LIST } from '../data/maps';
 import type { DifficultyDef, DifficultyId, MapDef, MapId } from '../data/types';
+import { CUSTOM_WAVES_MAX, CUSTOM_WAVES_MIN, HEAVY_ONLY_FROM, clampWaveCount } from '../data/waves';
 import type { SimConfig } from '../sim/types';
-import { cap, dlRows, fmtInt, h, prefersReducedMotion } from './dom';
-import { CORE_COLOR, drawMapThumbnail, SPAWN_COLOR } from './thumbnail';
+import { badge, cap, fmtInt, h, prefersReducedMotion, rankTone } from './dom';
+import { drawMapThumbnail } from './thumbnail';
 
 const GAME_TITLE = 'STEEL MERIDIAN';
 const GAME_SUBTITLE = 'Frontier Defense Command';
 
 const LS_MAP = 'steel-meridian.map';
 const LS_DIFF = 'steel-meridian.difficulty';
+const LS_WAVE_MODE = 'steel-meridian.waveMode';
+const LS_WAVES = 'steel-meridian.waves';
+
+/** Pip rows are as long as the highest tier on offer (at least 4), so every card's row lines up. */
+const MAX_TIER = Math.max(4, ...MAP_LIST.map((m) => m.tier));
+/** Range thumb is 14px wide: its centre travels from 7px to (100% - 7px). Ticks and fill use the same mapping. */
+const thumbPos = (v: number): string =>
+  `calc(7px + (100% - 14px) * ${(v - CUSTOM_WAVES_MIN) / (CUSTOM_WAVES_MAX - CUSTOM_WAVES_MIN)})`;
 
 const DIFF_FLAVOR: Readonly<Record<DifficultyId, string>> = {
   easy: 'Fresh crews, forgiving odds. Extra credits and a deep reserve of lives.',
@@ -40,24 +49,50 @@ function diffMods(d: DifficultyDef): string {
   return mods.join(' · ');
 }
 
-const tierPips = (tier: number): string => '▮'.repeat(tier) + '▯'.repeat(Math.max(0, 3 - tier));
+const pips = (tier: number): HTMLElement =>
+  h('span', 'pips', { 'aria-hidden': 'true' }, ...Array.from({ length: MAX_TIER }, (_, i) => h('i', i < tier ? 'on' : '')));
+
+const row = (k: string, ...v: (Node | string)[]): HTMLElement => h('div', 'row', {}, h('dt', '', {}, k), h('dd', '', {}, ...v));
+
+/** Two-option segmented control (`.seg`); returns the group and its inputs. */
+function seg<T extends string>(name: string, label: string, opts: readonly [T, string][], value: T, onPick: (v: T) => void) {
+  const group = h('div', 'seg', { role: 'radiogroup', 'aria-label': label });
+  const inputs = opts.map(([v, text]) => {
+    const input = h('input', 'sr-only', { type: 'radio', name, value: v, checked: v === value });
+    input.addEventListener('change', () => onPick(v));
+    group.append(h('label', '', {}, input, h('span', '', {}, text)));
+    return input;
+  });
+  return { group, inputs };
+}
 
 export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) => void): { destroy(): void } {
   const savedMap = load(LS_MAP);
   const savedDiff = load(LS_DIFF);
+  const savedWaves = Number(load(LS_WAVES));
   let mapId: MapId = savedMap && Object.hasOwn(MAPS, savedMap) ? (savedMap as MapId) : MAP_LIST[0]!.id;
   let diffId: DifficultyId = savedDiff && Object.hasOwn(DIFFICULTIES, savedDiff) ? (savedDiff as DifficultyId) : 'normal';
+  let custom = load(LS_WAVE_MODE) === 'custom';
+  // first Custom value: the remembered one, else the selected map's campaign length
+  let waves = clampWaveCount(savedWaves > 0 ? savedWaves : MAPS[mapId].waves.length);
 
   // --- backdrop
   const stars = h('canvas', 'home-stars', { 'aria-hidden': 'true' });
   const planet = h('div', 'home-planet', { 'aria-hidden': 'true' });
 
   // --- map list
+  const px = window.devicePixelRatio >= 2 ? 16 : 12;
   const mapList = h('div', 'home-maplist', { role: 'radiogroup', 'aria-label': 'Theatre of operations' });
   for (const m of MAP_LIST) {
     const thumb = h('canvas', 'thumb');
-    drawMapThumbnail(thumb, m, 8);
-    const input = h('input', 'sr-only', { type: 'radio', name: 'sm-map', value: m.id, checked: m.id === mapId });
+    drawMapThumbnail(thumb, m, px);
+    const input = h('input', 'sr-only', {
+      type: 'radio',
+      name: 'sm-map',
+      value: m.id,
+      checked: m.id === mapId,
+      'aria-label': `${m.name}, ${cap(m.biome)}, threat tier ${m.tier}, ${m.waves.length} waves`,
+    });
     input.addEventListener('change', () => selectMap(m.id));
     mapList.append(
       h(
@@ -67,50 +102,74 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
         input,
         h(
           'span',
-          'map-card-body panel',
+          'tile',
           {},
-          h('span', 'screen thumb-frame', {}, thumb),
-          h(
-            'span',
-            'map-card-text',
-            {},
-            h('span', 'map-card-name', {}, m.name),
-            h('span', 'map-card-meta', {}, `${cap(m.biome)} · ${m.waves.length} waves`),
-            h('span', 'map-card-tier', { 'aria-label': `Threat tier ${m.tier}` }, `THREAT ${tierPips(m.tier)}`),
-          ),
+          h('span', 'tile-art well', {}, thumb, badge(String(m.tier), rankTone(m.tier), 24)),
+          h('span', 'map-name', {}, m.name),
+          h('span', 'map-meta', {}, h('span', '', {}, `${cap(m.biome)} · ${m.waves.length} waves`), pips(m.tier)),
         ),
       ),
     );
   }
 
-  const swatch = (color: string, label: string): HTMLElement =>
-    h('li', '', {}, h('i', '', { style: `background:${color}` }), label);
-  const legend = h(
-    'ul',
-    'map-legend',
-    { 'aria-label': 'Map legend' },
-    swatch(SPAWN_COLOR, 'Hostile spawn'),
-    swatch(CORE_COLOR, 'Core'),
-    swatch('#5a6470', 'Build pad'),
-    swatch('#8a7458', 'Approach route'),
-  );
-
   // --- briefing
   const briefTitle = h('h2', 'brief-map');
-  const briefThumb = h('canvas', 'thumb');
-  const intel = h('dl', 'brief-intel');
+  const briefBadge = h('span');
+  const intel = h('dl', 'rows brief-intel');
   const briefText = h('p', 'brief-text', { 'aria-hidden': 'true' });
   const briefSr = h('p', 'sr-only');
-  const diffGroup = h('div', 'diff-switch', { role: 'radiogroup', 'aria-label': 'Difficulty' });
-  for (const d of DIFFICULTY_LIST) {
-    const input = h('input', 'sr-only', { type: 'radio', name: 'sm-diff', value: d.id, checked: d.id === diffId });
-    input.addEventListener('change', () => selectDiff(d.id));
-    diffGroup.append(h('label', 'diff-seg', {}, input, h('span', '', {}, d.name)));
-  }
+
+  const diff = seg('sm-diff', 'Difficulty', DIFFICULTY_LIST.map((d) => [d.id, d.name] as [DifficultyId, string]), diffId, selectDiff);
   const diffDesc = h('p', 'diff-desc');
   const diffMod = h('p', 'diff-mods');
-  const launch = h('button', 'btn btn-launch', { type: 'button' }, 'Launch');
+
+  // --- wave count (GDD §15, spec §3.3)
+  const mode = seg('sm-waves', 'Wave count', [['campaign', 'Campaign'], ['custom', 'Custom']], custom ? 'custom' : 'campaign', (v) => {
+    custom = v === 'custom';
+    // never picked a custom length yet: start from this map's campaign length
+    if (custom && load(LS_WAVES) === null) waves = clampWaveCount(MAPS[mapId].waves.length);
+    save(LS_WAVE_MODE, v);
+    renderWaves();
+  });
+  const campaignLabel = mode.group.querySelector('span')!;
+  const minus = h('button', 'btn btn-secondary btn-icon', { type: 'button', 'aria-label': 'Fewer waves', title: 'Fewer waves' }, '−');
+  const plus = h('button', 'btn btn-secondary btn-icon', { type: 'button', 'aria-label': 'More waves', title: 'More waves' }, '+');
+  const out = h('output', 'well wave-out', { 'aria-hidden': 'true' });
+  const heavyBadge = badge('!', 'violet', 22);
+  heavyBadge.title = `Waves ${HEAVY_ONLY_FROM}+: bosses and heavies only`;
+  const range = h('input', 'range', {
+    type: 'range',
+    min: CUSTOM_WAVES_MIN,
+    max: CUSTOM_WAVES_MAX,
+    step: 1,
+    'aria-label': 'Custom wave count',
+  });
+  range.style.setProperty('--zone', thumbPos(HEAVY_ONLY_FROM));
+  const tickValues = [CUSTOM_WAVES_MIN, HEAVY_ONLY_FROM, CUSTOM_WAVES_MAX];
+  for (let t = Math.ceil((CUSTOM_WAVES_MIN + 1) / 10) * 10; t < CUSTOM_WAVES_MAX; t += 10)
+    if (Math.abs(t - HEAVY_ONLY_FROM) > 2) tickValues.push(t);
+  const ticks = h(
+    'div',
+    'ticks',
+    { 'aria-hidden': 'true' },
+    ...tickValues.map((t) => h('span', t === HEAVY_ONLY_FROM ? 'heavy' : '', { style: `left:${thumbPos(t)}` }, String(t))),
+  );
+  const note = h('p', 'zone-note');
+  const customBox = h(
+    'div',
+    'wave-custom',
+    {},
+    h('div', 'stepper', {}, minus, h('div', 'wave-range', {}, range, ticks), plus, out, heavyBadge),
+    note,
+  );
+  minus.addEventListener('click', () => setWaves(waves - 1));
+  plus.addEventListener('click', () => setWaves(waves + 1));
+  range.addEventListener('input', () => setWaves(range.valueAsNumber));
+
+  const launch = h('button', 'btn btn-primary btn-lg btn-chevron is-pulsing', { type: 'button' }, 'Begin operation');
   launch.addEventListener('click', start);
+
+  const label = (text: string): HTMLElement => h('div', 'ctl-label', {}, text);
 
   const screen = h(
     'div',
@@ -118,42 +177,42 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
     {},
     stars,
     planet,
-    h(
-      'header',
-      'home-title',
-      {},
-      h('h1', '', {}, GAME_TITLE),
-      h('p', '', {}, GAME_SUBTITLE),
-    ),
+    h('header', 'home-title', {}, h('h1', '', {}, GAME_TITLE), h('p', '', {}, GAME_SUBTITLE)),
     h(
       'main',
       'home-grid',
       {},
-      h('section', 'panel home-maps', { 'aria-labelledby': 'sm-maps-h' }, h('h2', 'panel-h', { id: 'sm-maps-h' }, 'Select theatre'), mapList, legend),
+      h(
+        'section',
+        'panel home-maps',
+        { 'aria-labelledby': 'sm-maps-h' },
+        h('h2', 'panel-h', { id: 'sm-maps-h' }, 'Select theatre', h('span', 'panel-count', {}, `${MAP_LIST.length} theatres`)),
+        mapList,
+      ),
       h(
         'section',
         'panel home-brief',
         { 'aria-label': 'Mission briefing' },
         h('div', 'panel-h', {}, 'Mission briefing'),
-        briefTitle,
-        h(
-          'div',
-          'brief-top',
-          {},
-          h('div', 'screen scanlines thumb-frame brief-thumb', {}, briefThumb),
-          h('div', 'screen brief-intel-wrap', {}, intel),
-        ),
-        h('div', 'screen scanlines brief-text-wrap', {}, briefText, briefSr),
-        h(
-          'div',
-          'brief-bottom',
-          {},
-          h('div', 'diff-block', {}, h('div', 'label', {}, 'Difficulty'), diffGroup, diffDesc, diffMod),
-          launch,
-        ),
+        h('div', 'brief-head', {}, briefTitle, briefBadge),
+        intel,
+        h('div', 'well brief-text-wrap', {}, briefText, briefSr),
+        h('div', 'ctl', {}, label('Difficulty'), diff.group, diffDesc, diffMod),
+        h('div', 'ctl', {}, h('div', 'ctl-inline', {}, label('Waves'), mode.group), customBox),
       ),
+      h('div', 'home-start', {}, launch),
     ),
-    h('footer', 'home-hint', {}, 'TAB / ARROWS  select   ·   ENTER  launch'),
+    h(
+      'footer',
+      'home-hint',
+      {},
+      h('kbd', '', {}, 'Tab'),
+      ' / ',
+      h('kbd', '', {}, '← →'),
+      ' select   ·   ',
+      h('kbd', '', {}, 'Enter'),
+      ' launch',
+    ),
   );
   root.append(screen);
 
@@ -171,33 +230,58 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
     save(LS_MAP, id);
     const m = MAPS[id];
     briefTitle.textContent = m.name;
-    drawMapThumbnail(briefThumb, m, 20);
+    briefBadge.replaceChildren(badge(String(m.tier), rankTone(m.tier), 28));
+    briefBadge.title = `Threat tier ${m.tier}`;
     typeBriefing(m);
-    renderIntel();
+    renderWaves();
   }
 
   function selectDiff(id: DifficultyId): void {
     diffId = id;
     save(LS_DIFF, id);
-    const d = DIFFICULTIES[id];
     diffDesc.textContent = DIFF_FLAVOR[id];
-    diffMod.textContent = diffMods(d);
+    diffMod.textContent = diffMods(DIFFICULTIES[id]);
+    renderIntel();
+  }
+
+  function setWaves(v: number): void {
+    waves = clampWaveCount(v);
+    save(LS_WAVES, String(waves));
+    renderWaves();
+  }
+
+  function renderWaves(): void {
+    const heavy = waves >= HEAVY_ONLY_FROM;
+    campaignLabel.textContent = `Campaign · ${MAPS[mapId].waves.length}`;
+    customBox.hidden = !custom;
+    out.textContent = String(waves);
+    range.value = String(waves);
+    range.style.setProperty('--val', thumbPos(waves));
+    range.setAttribute('aria-valuetext', `${waves} waves${heavy ? ', heavy assault' : ''}`);
+    minus.disabled = waves <= CUSTOM_WAVES_MIN;
+    plus.disabled = waves >= CUSTOM_WAVES_MAX;
+    // a focused ± that just hit its bound would drop focus to <body>; hand it to the range instead
+    if ((minus.disabled && document.activeElement === minus) || (plus.disabled && document.activeElement === plus)) range.focus();
+    heavyBadge.hidden = !heavy;
+    note.classList.toggle('is-heavy', heavy);
+    const span = waves === HEAVY_ONLY_FROM ? `Wave ${waves}` : `Waves ${HEAVY_ONLY_FROM}–${waves}`;
+    note.textContent = heavy ? `${span}: bosses and heavies only` : `From wave ${HEAVY_ONLY_FROM}: bosses and heavies only`;
     renderIntel();
   }
 
   function renderIntel(): void {
     const m = MAPS[mapId];
     const d = DIFFICULTIES[diffId];
-    const rows: [string, string][] = [
-      ['Biome', cap(m.biome)],
-      ['Threat', `Tier ${m.tier}  ${tierPips(m.tier)}`],
-      ['Waves', String(m.waves.length)],
-      ['Approaches', String(m.paths.length)],
-      ['Grid', `${m.cols}×${m.rows}`],
-      ['Credits', `${fmtInt(m.startingCash * d.startCashMult)} cr`],
-      ['Lives', String(d.lives)],
-    ];
-    intel.replaceChildren(...dlRows(rows));
+    const n = custom ? waves : m.waves.length;
+    intel.replaceChildren(
+      row('Biome', cap(m.biome)),
+      row('Threat', pips(m.tier), h('span', 'sr-only', {}, `Tier ${m.tier}`)),
+      row('Waves', custom && n >= HEAVY_ONLY_FROM ? `${n} · ${HEAVY_ONLY_FROM}+ heavy` : String(n)),
+      row('Approaches', String(m.paths.length)),
+      row('Grid', `${m.cols}×${m.rows}`),
+      row('Credits', `${fmtInt(m.startingCash * d.startCashMult)} cr`),
+      row('Lives', String(d.lives)),
+    );
   }
 
   function typeBriefing(m: MapDef): void {
@@ -217,7 +301,7 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
   }
 
   function start(): void {
-    onStart({ mapId, difficultyId: diffId });
+    onStart({ mapId, difficultyId: diffId, waveCount: custom ? waves : undefined });
   }
 
   selectMap(mapId);
@@ -274,7 +358,7 @@ function runStarfield(canvas: HTMLCanvasElement): () => void {
         s.tw += dt * 2;
       }
       const a = ALPHA[s.layer]! * (0.75 + 0.25 * Math.sin(s.tw));
-      ctx!.fillStyle = s.layer === 2 ? `rgba(200,240,255,${a})` : `rgba(180,200,220,${a})`;
+      ctx!.fillStyle = `rgba(200,225,255,${a})`;
       const sz = SIZE[s.layer]!;
       ctx!.fillRect(Math.round(s.x * w), Math.round(s.y * hgt), sz, sz);
     }

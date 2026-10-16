@@ -22,7 +22,7 @@ function home(): void {
 }
 
 function play(cfg: SimConfig): void {
-  const game = createGame(cfg);
+  const game = createGame(cfg); // cfg.waveCount: undefined = Campaign; restart reuses cfg, so the run length sticks
   const renderer = createRenderer(container, MAPS[cfg.mapId]);
   const fx = createFx(renderer.scene, renderer.interp, MAPS[cfg.mapId]);
   const canvas = container.querySelector('canvas')!;
@@ -162,8 +162,9 @@ function play(cfg: SimConfig): void {
         case 'waveStart': {
           const n = ev.index + 1;
           const bonus = ev.earlyBonus > 0 ? ` · early bonus +${ev.earlyBonus}` : '';
-          if (ev.boss === 'final') hud.flash(`Warning · final assault · massive signature · wave ${n}${bonus}`);
-          else if (ev.boss === 'mid') hud.flash(`Warning · massive signature · wave ${n}${bonus}`);
+          // custom runs flag milestone bosses 'final' too, so "last wave" is the index (GDD §15)
+          if (ev.index === game.state.waveCount - 1) hud.flash(`Warning · final assault · massive signature · wave ${n}${bonus}`, 'warn');
+          else if (ev.boss) hud.flash(`Warning · massive signature · wave ${n}${bonus}`, 'warn');
           else hud.flash(`Wave ${n} incoming${bonus}`);
           break;
         }
@@ -171,7 +172,7 @@ function play(cfg: SimConfig): void {
           if (ev.power === 'lance_strike' && ev.charges === 1) hud.flash('Lance strike ready');
           break;
         case 'waveClear':
-          if (game.state.status === 'playing') hud.flash(`Wave ${ev.index + 1} cleared · +${ev.bonus} cr`);
+          if (game.state.status === 'playing') hud.flash(`Wave ${ev.index + 1} cleared · +${ev.bonus} cr`, 'good');
           break;
       }
     }
