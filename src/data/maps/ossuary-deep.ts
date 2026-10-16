@@ -192,6 +192,6 @@ export const ossuaryDeep: MapDef = {
   waves: ossuaryDeepWaves,
   // Generated heavies and bosses never take the 14-tile sally port (GDD §15).
   heavyPaths: [0],
-  hpGrowth: 1.08,
+  hpGrowth: 1.095,
   startingCash: 750,
 };

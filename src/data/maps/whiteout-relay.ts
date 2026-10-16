@@ -162,6 +162,6 @@ export const whiteoutRelay: MapDef = {
     [[0, 1], [11, 1], [11, 4], [18, 4], [18, 11], [11, 11], [11, 14], [23, 14]],
   ],
   waves: whiteoutRelayWaves,
-  hpGrowth: 1.07,
+  hpGrowth: 1.0725,
   startingCash: 650,
 };

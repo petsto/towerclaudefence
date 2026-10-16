@@ -111,11 +111,11 @@ Cash results round down. Wave content is identical across difficulties.
 | Dust Ridge Outpost | Badlands | 1 | 24×16 | 1 (69 tiles) | 86 | 15 | 1.060 | ×2.3 | W8 Choir Mother | W15 Choir Mother |
 | Cinder Forge | Volcanic | 2 | 22×14 | 2, merge at [9,7] | 45 | 18 | 1.075 | ×3.4 | W9 Choir Mother | W18 Foundry Colossus |
 | Hollow Spire | Crystal / creep | 3 | 20×14 | 2, merge at [11,9] | 22 | 20 | 1.080 | ×4.3 | W10 Foundry Colossus | W20 both |
-| Whiteout Relay | Frost (new) | 2 | 24×16 | 2: one spawn, fork at [11,4], rejoin at [11,11] (51 tiles each) | 48 | 18 | 1.070 | ×3.2 | W9 Foundry Colossus | W18 Choir Mother |
+| Whiteout Relay | Frost (new) | 2 | 24×16 | 2: one spawn, fork at [11,4], rejoin at [11,11] (51 tiles each) | 48 | 18 | 1.0725 | ×3.3 | W9 Foundry Colossus | W18 Choir Mother |
 | Blackwater Sluice | Marsh (new) | 3 | 24×16 | 3 inlets, merge at [8,4] then [15,9] (35 / 31 / 34 tiles) | 34 | 20 | 1.080 | ×4.3 | W10 Foundry Colossus | W20 Choir Mother |
-| Ossuary Deep | Crystal (hive-heart palette) | 4 | 20×14 | 2: spiral (71 tiles) + sally port (14), cross at [17,8], share row 8 from [14,8] | 18 | 22 | 1.080 | ×5.0 | W11 Choir Mother | W22 Choir Mother + Foundry Colossus |
+| Ossuary Deep | Crystal (hive-heart palette) | 4 | 20×14 | 2: spiral (71 tiles) + sally port (14), cross at [17,8], share row 8 from [14,8] | 18 | 22 | 1.095 | ×6.7 | W11 Choir Mother | W22 Choir Mother + Foundry Colossus |
 
-Home order (`MAP_LIST`, tier ascending): Dust Ridge, Whiteout Relay, Cinder Forge, Blackwater Sluice, Hollow Spire, Ossuary Deep. Tier pips scale to the highest tier (4). New maps are spec'd in `docs/design/maps.md` §4–§6 (not yet in `src/data`).
+Home order (`MAP_LIST`, tier ascending): Dust Ridge, Whiteout Relay, Cinder Forge, Blackwater Sluice, Hollow Spire, Ossuary Deep. Tier pips scale to the highest tier (4). New maps are spec'd in `docs/design/maps.md` §4–§6 (balance errata there). Starting cash: Whiteout Relay 650, Blackwater Sluice 750, Ossuary Deep 750.
 
 Tile legend: `.` ground · `#` path · `B` build · `S` spawn · `C` core · `x` decor. Strategy notes per map: `docs/design/maps.md`.
 
@@ -189,9 +189,9 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 | Waves | Content |
 |---|---|
 | 1–6 | W, N, S, W, N, S: Skitterlings; Husk intro W3 (S); Spindle intro W5 (N); Brood Carrier intro W6 (S) |
-| 7–9 | Husks W + 16-swarm N; Rivet intro N + Husks S; Mender intro with Husks W + 16-swarm S |
+| 7–9 | Husks W + 16-swarm N; Rivet intro (2) N + Husks S + Skitterlings W; Mender intro with Husks W + 16-swarm S. Husks here and in W4 at 1.5 s spacing |
 | 10 | **Mid boss:** Foundry Colossus (×0.55) W with Spindle escort; Skitterlings N and S |
-| 11–12 | Twin Broods S + Husk W; Husks N vs Rivets + Mender W |
+| 11–12 | Broods S and W + Husk W; Husks N vs Rivets + Mender W |
 | 13 | Triple 16-swarm, all inlets at once |
 | 14–18 | Anvil intro W, Husks N, Brood S; 7 Husks + Mender S vs 14 Spindles N; Brood W, Rivets N, swarm S; Anvil S, Husks + Mender W, Spindles N; Brood N, Rivets S, 24-swarm W |
 | 19 | Twin Anvils W, Brood S, Husks + Mender N (ramp) |
@@ -269,6 +269,19 @@ Both bots use the command powers via `withPowers` (§14); one extra block runs t
 - **Elite:** wins Dust Ridge narrowly; loses maps 2–3 on their last waves.
 - **Brutal:** dies mid-to-late on every map.
 - **Mixing matters:** no single-tower build (`competentStrategy(['picket'])` etc.) beats the mixed bot; mono builds lose Cinder Forge and Hollow Spire on Veteran; Stasis alone never gets past W2.
+
+**Stage 10 maps.** Competent bot with powers, Recruit / Veteran / Elite / Brutal (W = win, else the wave of the loss). Tuned 2026-10-16:
+
+| Map (tier) | Campaign | Custom N = 50 |
+|---|---|---|
+| Whiteout Relay (2) | W · W · W (15 lives) · 18 | W · 47 · 31 · 19 |
+| Blackwater Sluice (3) | W · 20 · 18 · 15 | 50 · 21 · 19 · 15 |
+| Ossuary Deep (4) | W · 20 · 19 · 19 | 43 · 20 · 19 · 19 |
+
+- **Whiteout** sits between Dust Ridge (wins all four) and Cinder Forge (loses Elite). Its wall is the Choir Mother final.
+- **Blackwater** loses Veteran at the final, as Hollow Spire does. Its Elite and Brutal leaks are spread over the mid-to-late waves, not on one wall wave.
+- **Ossuary** is the hardest map: it loses Veteran before or at the twin-boss final, and the Recruit win leaves 30 lives. The naive bot wins Recruit on every new map. No mono-tower build wins any new map on Veteran.
+- **Bot sensitivity:** the competent bot is chaotic, so ±50 starting cash moves single cells by several waves. Blackwater Brutal is the most sensitive: it ranges from W11 (the mid-boss Colossus leaks) to W17 for 700–850 cash. The other cells keep their result across ±50 cash and ±0.0025 growth.
 
 Known gaps:
 

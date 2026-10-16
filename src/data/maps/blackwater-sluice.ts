@@ -39,7 +39,7 @@ const blackwaterSluiceWaves: readonly WaveDef[] = [
   ] },
   // W4: base pool 935 (curve 945)
   { boss: null, groups: [
-    g('husk_crawler', 2, 0.9, 0, 0),
+    g('husk_crawler', 2, 1.5, 0, 0),
     g('skitterling', 11, 0.4, 3.9, 0),
   ] },
   // W5: base pool 1060 (curve 1080)
@@ -54,18 +54,19 @@ const blackwaterSluiceWaves: readonly WaveDef[] = [
   ] },
   // W7: base pool 1380 (curve 1350)
   { boss: null, groups: [
-    g('husk_crawler', 3, 0.9, 0, 0),
+    g('husk_crawler', 3, 1.5, 0, 0),
     g('skitterling', 16, 0.3, 0, 1),
   ] },
-  // W8: base pool 1540 (curve 1485)
+  // W8: base pool 1460 (curve 1485)
   { boss: null, groups: [
-    g('rivet_walker', 3, 0.9, 0, 1),
-    g('husk_crawler', 4, 0.9, 0, 2),
+    g('skitterling', 8, 0.4, 0, 0),
+    g('rivet_walker', 2, 0.9, 0, 1),
+    g('husk_crawler', 3, 1.5, 0, 2),
   ] },
   // W9: base pool 1540 (curve 1620)
   { boss: null, groups: [
     g('mender_unit', 1, 0.9, 0, 0),
-    g('husk_crawler', 3, 0.9, 3, 0),
+    g('husk_crawler', 3, 1.5, 3, 0),
     g('skitterling', 16, 0.3, 0, 2),
   ] },
   // W10: base pool 3125 (curve 1755) mid
@@ -77,8 +78,9 @@ const blackwaterSluiceWaves: readonly WaveDef[] = [
   ] },
   // W11: base pool 1990 (curve 1890)
   { boss: null, groups: [
-    g('brood_carrier', 2, 1.8, 0, 2),
+    g('brood_carrier', 1, 1.8, 0, 2),
     g('husk_crawler', 1, 0.9, 0, 0),
+    g('brood_carrier', 1, 1.8, 3, 0),
   ] },
   // W12: base pool 1920 (curve 2025)
   { boss: null, groups: [
@@ -173,5 +175,5 @@ export const blackwaterSluice: MapDef = {
   ],
   waves: blackwaterSluiceWaves,
   hpGrowth: 1.08,
-  startingCash: 700,
+  startingCash: 750,
 };

@@ -758,6 +758,17 @@ xxxxx....xxxxxxxxxxx
   ] },
 ```
 
+### Errata (balance pass, as built)
+
+`npm run balance` tuned the numbers above to the GDD §13 ladder. The map files are authoritative. Layouts, paths, rosters and `heavyPaths` are unchanged.
+
+- **Whiteout Relay:** `hpGrowth` **1.0725** (was 1.07). At 1.07 the competent bot won Brutal at nearby settings (starting cash 675, or growth 1.0675), so the map sat on Dust Ridge's level. At 1.0725 it wins Elite and loses Brutal at the final.
+- **Blackwater Sluice:** `startingCash` **750** (was 700). The early waves are reshaped because Husks leaked on the short inlets, and the competent bot died on Brutal at W8:
+  - W4, W7, W8 and W9: Husk interval 1.5 s (was 0.9), so towers kill them one at a time through the regen.
+  - W8: the Rivet intro is 2 Rivets N (was 3) and 3 Husks S (was 4), plus 8 Skitterlings W. Pool 1460.
+  - W11: the twin Broods split, one S at 0 s and one W at 3 s (both were S). Pool unchanged.
+- **Ossuary Deep:** `hpGrowth` **1.095** (was 1.08), so the final is ×6.7. With 18 pads the map saturates on upgrades, so cash does nothing and HP growth is the lever. At 1.08 the bot won Veteran on full lives.
+
 ---
 
 ## Biome specs (terrain engineer)
