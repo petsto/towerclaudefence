@@ -111,10 +111,17 @@ Cash results round down. Wave content is identical across difficulties.
 | Dust Ridge Outpost | Badlands | 1 | 24×16 | 1 (69 tiles) | 86 | 15 | 1.060 | ×2.3 | W8 Choir Mother | W15 Choir Mother |
 | Cinder Forge | Volcanic | 2 | 22×14 | 2, merge at [9,7] | 45 | 18 | 1.075 | ×3.4 | W9 Choir Mother | W18 Foundry Colossus |
 | Hollow Spire | Crystal / creep | 3 | 20×14 | 2, merge at [11,9] | 22 | 20 | 1.080 | ×4.3 | W10 Foundry Colossus | W20 both |
+| Whiteout Relay | Frost (new) | 2 | 24×16 | 2: one spawn, fork at [11,4], rejoin at [11,11] (51 tiles each) | 48 | 18 | 1.070 | ×3.2 | W9 Foundry Colossus | W18 Choir Mother |
+| Blackwater Sluice | Marsh (new) | 3 | 24×16 | 3 inlets, merge at [8,4] then [15,9] (35 / 31 / 34 tiles) | 34 | 20 | 1.080 | ×4.3 | W10 Foundry Colossus | W20 Choir Mother |
+| Ossuary Deep | Crystal (hive-heart palette) | 4 | 20×14 | 2: spiral (71 tiles) + sally port (14), cross at [17,8], share row 8 from [14,8] | 18 | 22 | 1.080 | ×5.0 | W11 Choir Mother | W22 Choir Mother + Foundry Colossus |
+
+Home order (`MAP_LIST`, tier ascending): Dust Ridge, Whiteout Relay, Cinder Forge, Blackwater Sluice, Hollow Spire, Ossuary Deep. Tier pips scale to the highest tier (4). New maps are spec'd in `docs/design/maps.md` §4–§6 (not yet in `src/data`).
 
 Tile legend: `.` ground · `#` path · `B` build · `S` spawn · `C` core · `x` decor. Strategy notes per map: `docs/design/maps.md`.
 
 ## 8. Waves
+
+These are the **Campaign** lists. Custom run lengths (10–50 waves) reuse them as a prefix and generate the rest: §15.
 
 Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in each map file. `delay` = seconds from wave start to the group's first spawn (so groups on different paths run in parallel). Defaults: interval L 0.4 / M 0.9 / H 1.8 s (swarms 0.3); 3 s gap between consecutive groups on a path; boss escorts 3 s after the boss. Base HP pool tracks wave-1 pool × (1 + 0.25(w−1)) before growth; boss waves exceed it by design (mid ×1.6–1.9 of the curve, a skill check; final ×1.6–2.3 of the wave before it). The wave before each final runs ~1.2–1.4× the curve so defenses ramp into the boss instead of hitting a cliff. One new enemy per wave at most.
 
@@ -160,6 +167,49 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 | 12 | Anvil Tread intro with Mender N; Rivets E |
 | 13–19 | Husk/Rivet split; Anvil–Mender–Anvil; Broods + stream; twin Anvils + Spindle screen; twin 24-swarms; Broods vs Rivet+Mender; Anvils + Mender vs 6 Rivets (ramp) |
 | 20 | **Final:** Choir Mother N + Foundry Colossus E simultaneously, Husk/Rivet escorts |
+
+**Whiteout Relay** (one spawn; path 0 = west branch, 1 = east branch, shared head and tail; every group picks a branch; Remnant-leaning)
+
+| Waves | Content |
+|---|---|
+| 1–2 | Spindles W + Skitterlings E; 16-Skitterling stream E |
+| 3–4 | Husk Crawler intro E vs Spindles W; Rivet Walker intro W vs Skitterlings E |
+| 5–6 | Husks + Skitterlings E vs Spindles W; Rivets W vs Spindles E |
+| 7 | Mender Unit intro leading Rivets W; Husks E |
+| 8 | Twin 14-swarms (one per branch) + Rivets E |
+| 9 | **Mid boss:** Spindles → Foundry Colossus (×0.55) W, Rivet escort; Skitterlings E |
+| 10–12 | Husks W vs 14 Spindles E; Brood Carrier intro E vs Rivets + Mender W; Rivets on both branches + Spindles |
+| 13 | Anvil Tread intro W; Spindles + Husks E |
+| 14–16 | 20-swarm W vs Husks + Mender E; Anvil E vs Brood + Spindles W; Rivet column + Mender W vs Husks E |
+| 17 | Twin Anvils (one per branch), Spindle screen, Mender + Rivets (ramp) |
+| 18 | **Final:** Spindles → Choir Mother W, Husk escort; Rivets E before and after her |
+
+**Blackwater Sluice** (path 0 = west, 1 = north, 2 = south; one inlet per wave W1–6, two from W7, all three from W13; Chorus-heavy)
+
+| Waves | Content |
+|---|---|
+| 1–6 | W, N, S, W, N, S: Skitterlings; Husk intro W3 (S); Spindle intro W5 (N); Brood Carrier intro W6 (S) |
+| 7–9 | Husks W + 16-swarm N; Rivet intro N + Husks S; Mender intro with Husks W + 16-swarm S |
+| 10 | **Mid boss:** Foundry Colossus (×0.55) W with Spindle escort; Skitterlings N and S |
+| 11–12 | Twin Broods S + Husk W; Husks N vs Rivets + Mender W |
+| 13 | Triple 16-swarm, all inlets at once |
+| 14–18 | Anvil intro W, Husks N, Brood S; 7 Husks + Mender S vs 14 Spindles N; Brood W, Rivets N, swarm S; Anvil S, Husks + Mender W, Spindles N; Brood N, Rivets S, 24-swarm W |
+| 19 | Twin Anvils W, Brood S, Husks + Mender N (ramp) |
+| 20 | **Final:** Choir Mother S (the long lone inlet) with Brood escort; Skitterlings + Anvil W; Husks + Spindles N |
+
+**Ossuary Deep** (path 0 = spiral, 1 = sally port; heavies and bosses always take the spiral; sally from W4; full roster)
+
+| Waves | Content |
+|---|---|
+| 1–3 | Spiral only: Skitterlings + one Husk; Skitterlings + Spindles; Husks |
+| 4–5 | Sally port opens: Spindles through it while Skitterlings / Husks walk the spiral |
+| 6–7 | Rivet intro (spiral) vs 14 Skitterlings (sally); Brood Carrier intro + Husks vs Spindles |
+| 8–10 | Husks + swarm vs Rivets (sally); Mender intro with 5 Rivets vs 14 Spindles; 20-swarm + Husks vs 12-swarm |
+| 11 | **Mid boss:** Skitterlings → Choir Mother (×0.55) on the spiral, Husk escort; Spindles + Rivets through the sally |
+| 12–13 | Twin Broods vs 14 Spindles; Anvil Tread intro + Mender + Husks vs Rivets |
+| 14–20 | 8 Husks vs 20-swarm + Mender; Broods vs Rivets + Spindles; twin Anvils vs Spindles + Rivets; Husks + swarm vs 6 Rivets + Mender; Anvil + Brood + Husks vs 16 Spindles; twin 24-swarms + Rivets + Mender; Broods + Anvil vs Rivets + Mender |
+| 21 | Twin Anvils, Brood, Mender (spiral) vs 6 Rivets + Spindles (ramp) |
+| 22 | **Final:** Choir Mother, then Foundry Colossus 8 s behind her on the spiral; Spindles + Rivets through the sally |
 
 ## 9. Game flow
 
@@ -278,3 +328,115 @@ Two orbital-support powers, free and unlimited, gated only by charge. They help 
 
 - **Mines:** whenever a charge is ready, plant on the free path tile covered by the most tower range rings, skipping tiles within 1.5 of an armed mine. Ties go to the tile nearer the core.
 - **Lance:** when ready, target the tile of a living boss. Otherwise target the enemy tile whose 1.75 radius holds the most enemy HP + shields, and fire only if that is ≥ one full strike on one target (900 × `g_map`^(w−1)). No lead on fast targets.
+
+## 15. Custom wave count (`src/data/waves.ts`)
+
+The home screen offers **Campaign** (default: the map's authored waves, §8) or **Custom**: the player picks a run length **N = 10–50** waves (`CUSTOM_WAVES_MIN`/`MAX`, step 1). Every map's Campaign length (15–22) lies in that range, and picking it gives the Campaign list itself. The list is `buildWaves(map, N)`: pure and deterministic from map + N (no RNG, no seed), identical across difficulties. Past wave 40 only heavies and bosses come (`HEAVY_ONLY_FROM` = 41), ending in a multi-boss finale.
+
+Why 10 and not 1: a closing boss needs a defense to meet. At N = 10 every map's closer sits at 0.89–1.04× its Campaign mid-boss pressure (closer HP ÷ cash earned before it). At N = 5 it would sit 20–40% above, a near-certain loss in the first 3 minutes with at most one Lance charge.
+
+### Building the list (L = authored count, M = authored mid-boss wave, both 1-based)
+
+| N | Waves 1..N−1 | Wave N (closer) |
+|---|---|---|
+| N = L | Campaign, unchanged (`map.waves`, same reference) | Campaign final |
+| N ≤ M + 2 ("quick") | The first N−1 **non-boss** authored waves (skips M) | Authored mid-boss wave M, flag `'mid'` (×0.55 boss) |
+| M + 2 < N < L ("truncated") | Authored 1..N−1 (keeps the mid boss at M, ≥3 waves before the closer) | Authored final wave, flag `'final'` |
+| N > L ("extended") | Authored 1..L−1; wave L = authored final if L ≤ N−3, else a generated wave; L+1..N−1 generated | Generated finale, flag `'final'` |
+
+Every run ends on a boss. **Boss clearance:** no boss wave sits in the two waves before the closer (that is why quick runs skip M and long runs drop the authored final when N ≤ L+2). The model puts truncated closers at 1.0–1.18× the Campaign closer's pressure, and quick closers at 0.9–1.04× the Campaign mid boss.
+
+`WaveDef.boss` keeps its two values: `'mid'` = ×0.55 bosses with `MID_BOSS_BOUNTY`, `'final'` = full-strength bosses. In custom runs `'final'` also marks milestone and heavy-phase boss waves, so "last wave" is `index === waveCount − 1` and not the flag (the HUD "final assault" flash must check the index).
+
+### Generated waves (waves L..N−1 of extended runs)
+
+- **Budget** (base HP + shields before growth, the §8 curve continued): `B(w) = W1 × (1 + 0.25(w − 1))`. `W1` is the authored wave 1's pool. An enemy's pool is `hp + shield`, plus its brood-burst children (Brood Carrier = 885).
+- **Roster:** `MapDef.roster`, or by default every enemy id in the authored waves, in order of first appearance. Classes come from `ENEMIES`: light, medium, heavy (`size === 'heavy' && !isBoss`), boss. **Heavy ids: `brood_carrier`, `anvil_tread`.** Bosses: `choir_mother`, `foundry_colossus`.
+- **Shape**, rotating with `w % 4`. Each share becomes one group: id = `classIds[(w + k) % classIds.length]` (k = group index), count = `max(1, round(share × budget / pool(id)))`. If the roster lacks a class, its share falls back to heavy→medium→light (light→medium).
+
+| `w % 4` | Shape | Shares |
+|---|---|---|
+| 0 | Swarm | light 60%, medium 40% |
+| 1 | Line | medium 70%, light 30% |
+| 2 | Armor | heavy 50%, medium 30%, light 20% |
+| 3 | Siege | heavy 60%, medium 40% |
+
+- **Paths:** group k goes on `allowed[(w + k) % allowed.length]`. `allowed` = `MapDef.heavyPaths` for heavy and boss groups (default: all paths), and all paths otherwise.
+- **Timing** (§8 defaults): interval L 0.4 s (0.3 s at count ≥ 16), M 0.9, H 1.8, boss 0. The first group on each path starts at 0. The next group on the same path starts 3 s after the previous one's last spawn. Round delays to 0.1 s.
+- **Milestone bosses:** w ∈ {20, 30, 40} (w % 10 = 0), if generated and w ≤ N−3. The boss is `bosses[floor(w/2) % bosses.length]` at full strength (`'final'`), spawned first. Its escort is the wave's shape at **0.5 × B(w)**, starting 3 s after the boss on its path.
+
+### Heavy phase (waves 41..N−1)
+
+- **Odd waves**, and even waves inside the clearance: two heavy groups, `heavies[w % h]` at 60% of B(w) and `heavies[(w+1) % h]` at 40%, interval 1.8 s, on `heavyPaths`. That makes 5–9 heavies a wave (Dust W45: 3 Anvil + 2 Brood).
+- **Even waves up to N−3** (42, 44, 46 at N = 50): one boss as for milestones, plus the two heavy groups at 0.5 × B(w).
+- No lights or mediums are authored here. Choir Mother births and Brood Carrier bursts still spawn Skitterlings: that's their kit, not filler.
+
+### Finale (wave N of an extended run)
+
+- **K bosses:** N ≤ 40 → one of each boss in the roster (1–2); 41 ≤ N ≤ 49 → 2; N = 50 → 3.
+- Boss ids are the roster bosses sorted by base speed descending (Choir 0.5 before Colossus 0.45), cycled to K. Boss k spawns at `k × FINALE_BOSS_SPACING` (8 s) on `heavyPaths[k % len]`. Faster in front means the gaps only grow (≥3.6 tiles), so one Lance (radius 1.75) catches at most one boss, except where paths merge. That merge exception is a skill reward.
+- **Escort:** 0.5 × B(N) as two heavy groups (N ≥ 41) or the `N % 4` shape (N ≤ 40), starting 3 s after the last boss.
+- Size check: the W50 finale is about 1.8× wave 49, inside §8's "final ×1.6–2.3 of the wave before".
+
+### HP scaling
+
+`hp(w) = baseHp × diffHp × (g_map + g_diff)^e` with `e = hpExponent(i, L)` (i 0-based). That's `i` for authored waves, and `(L−1) + (i − (L−1)) × CUSTOM_GROWTH_TAIL` (0.5) past them. So Campaign and short runs are unchanged, and growth halves its rate after the authored length. Raw `g^49` reaches ×17–43 (a W50 Hollow Choir Mother at 130k HP); the tail keeps W50 at ×6–15.
+
+| Map (L) | W50 growth (raw) | Choir Mother W50: Recruit / Veteran / Brutal | Lance pulse W50 (full strike) | Anvil Tread W50 HP+sh (Veteran) |
+|---|---|---|---|---|
+| Dust Ridge (15) | ×6.3 (×17.4) | 10.5k / 18.8k / 27.0k | 940 (5.6k) | 6.6k |
+| Whiteout Relay (18) | ×9.3 (×27.5) | 15.4k / 28.0k / 40.5k | 1,399 (8.4k) | 9.8k |
+| Cinder Forge (18) | ×10.9 (×34.6) | 18.0k / 32.6k / 47.2k | 1,631 (9.8k) | 11.4k |
+| Blackwater Sluice (20) | ×13.7 (×43.4) | 22.5k / 41.1k / 59.8k | 2,054 (12.3k) | 14.4k |
+| Hollow Spire (20) | ×13.7 (×43.4) | 22.5k / 41.1k / 59.8k | 2,054 (12.3k) | 14.4k |
+| Ossuary Deep (22) | ×14.8 (×43.4) | 24.0k / 44.4k / 65.0k | 2,218 (13.3k) | 15.5k |
+
+Pressure model (wave HP ÷ cash earned before it): the heavy phase holds about 1.4–1.6 on Dust, about 2.3–2.7 on tier-2 maps and about 3.0–4.3 on tier 3–4. That's 1.0–1.7× each map's own Campaign final, rising slowly, with the finale as the spike. `CUSTOM_GROWTH_TAIL` is the one knob the balance pass turns.
+
+### Economy
+
+**No new rules.** Bounty stays flat (§5) and the clear bonus stays `30 + 6w`: 276–330 cr in the heavy phase, doubled on boss waves.
+
+- **Income:** cumulative income at W50 is about 24–33k cr per map.
+- **Cash-bound maps:** income is the limit on cash-bound maps. Dust Ridge never fills its 86 pads (all pads at L3 ≈ 40k), so every wave there is still a spending decision.
+- **Pad-bound maps:** income outruns the pads on pad-bound maps (all pads at L3 ≈ pads × 460 cr). They saturate around Ossuary W24, Hollow W29, Sluice W38, Cinder W44 and Whiteout W45. From there the run is pure endurance: the "upgrades over count" identity of those maps taken to its end. That is deliberate.
+- **Bounty dip:** heavy-phase bounty runs lower per HP (Anvil 0.053 cr/HP vs ~0.085 average). The linear clear bonus covers most of the gap.
+- **Interest:** none, still.
+
+### Difficulty and Command Powers
+
+- **Difficulty:** unchanged and orthogonal. `hpMult` and `growthAdd` apply as in §6; the tail exponent applies to `g_map + g_diff`. Wave content and N are identical across difficulties.
+- **Lance pulse:** `150 × g_map^hpExponent(i, L)` (no `g_diff`, as in §14). It tracks enemy HP on Veteran: a full strike still leaves a W50 Anvil at ~15%, as at W1. On Brutal it falls behind the curve (W50 Hollow ×13.7 vs ×20.7), as intended by §14.
+- **Lance on bosses:** the 20% boss share is a fraction, so it scales by itself (8.2k of a W50 Hollow Choir).
+- **Lance supply:** a 50-wave run lasts roughly 45–60 min of sim time, about 18–24 Lance charges. Only one can be stored, so the finale sees 1–2 strikes: 20% of one boss each.
+- **Mines:** unchanged. Bosses take 30%; Anvils ignore them, so the heavy phase leans on slow-immune Anvils by design (towers, not mines, answer the heavy phase).
+
+### HUD and home (for `docs/design/ui-revamp.md`)
+
+- **Home:** a Campaign | Custom toggle. Custom shows a 10–50 stepper (quick picks 10 / 25 / 40 / 50, default 30), persisted like map and difficulty. Map cards read "15 WAVES" in Campaign and "CUSTOM · 50 WAVES" in Custom. Start passes `{ mapId, difficultyId, waveCount }`, with `waveCount` undefined for Campaign.
+- **HUD:** `WAVE 07 / 50` (`waveIndex + 1` / `waveCount`, two digits) in both modes, plus a small `CUSTOM` tag in custom runs.
+- **Wave 41 flash:** "Heavy assault · armor and bosses only".
+- **Boss flash:** "Final assault" only on the last wave; other `'final'` waves get "massive signature".
+- **Next-wave preview and summary:** both read `buildWaves(MAPS[mapId], waveCount)` (compute once per run), never `map.waves`. The summary shows "Waves 50 / 50 cleared".
+
+### Bots and balance
+
+- **Autoplay:** `threats()` reads `buildWaves(map, game.state.waveCount)`, and the Lance threshold uses `hpExponent`. `runAutoplay` already takes `SimConfig`, so `waveCount` passes through. A 50-wave run needs `maxSteps` ≈ `60 × 60 × 180`.
+- **`npm run balance`** gains a block "Custom runs (competent + powers)": every map × difficulty at N = 50, and every map at N = 10 on Veteran.
+- **Targets:**
+  - N = 10, Veteran: wins every map.
+  - N = 50, Recruit: reaches the heavy phase (W41+) everywhere and wins tiers 1–2.
+  - N = 50, Veteran: ≥ W30 everywhere, wins at most Dust Ridge.
+  - N = 50, Elite and Brutal: dies before W45 everywhere.
+
+### Contract
+
+| What | Where |
+|---|---|
+| `SimConfig.waveCount?: number` (undefined = Campaign; rounded, clamped) | `src/sim/types.ts` |
+| `GameState.waveCount` = N; wave list = `buildWaves(MAPS[mapId], waveCount)` (not stored on state) | `src/sim/types.ts` |
+| `CUSTOM_WAVES_MIN` 10, `CUSTOM_WAVES_MAX` 50, `HEAVY_ONLY_FROM` 41, `CUSTOM_GROWTH_TAIL` 0.5, `FINALE_BOSS_SPACING` 8 | `src/data/waves.ts` |
+| `hpExponent(waveIndex, authoredCount)` (done), `buildWaves(map, count?)` (stub: Campaign only) | `src/data/waves.ts` |
+| `MapDef.roster?: EnemyId[]` (default: enemies in `waves`), `MapDef.heavyPaths?: number[]` (default: all) | `src/data/types.ts` |
+
+Other rules stay local constants inside `buildWaves`: milestone every 10, clearance 2, escort share 0.5, the shape table, and finale K.

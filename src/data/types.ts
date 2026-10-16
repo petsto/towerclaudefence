@@ -16,6 +16,7 @@ export type EnemyId =
   | 'mender_unit'
   | 'anvil_tread'
   | 'foundry_colossus';
+// Next: 'whiteout-relay' | 'blackwater-sluice' | 'ossuary-deep' (docs/design/maps.md §4–§6), added with their map files.
 export type MapId = 'dust-ridge-outpost' | 'cinder-forge' | 'hollow-spire';
 export type DifficultyId = 'easy' | 'normal' | 'hard' | 'brutal';
 
@@ -129,11 +130,17 @@ export interface WaveGroup {
 }
 
 export interface WaveDef {
-  /** 'mid': bosses here use MID_BOSS_* values. Boss waves pay BOSS_WAVE_CLEAR_MULT. */
+  /**
+   * 'mid': bosses here use MID_BOSS_* values. 'final': full-strength bosses; the Campaign's last wave, and in custom
+   * runs (GDD §15) also milestone/heavy-phase boss waves and the finale, so "last wave" means index waveCount - 1,
+   * not this flag. Boss waves pay BOSS_WAVE_CLEAR_MULT.
+   */
   readonly boss: 'mid' | 'final' | null;
   readonly groups: readonly WaveGroup[];
 }
 
+// 'frost' and 'marsh' are specified in docs/design/maps.md (§4–§5); add them together with their render/ui cases
+// (build.ts style(), textures.ts branches, thumbnail.ts SPECK), which are exhaustive over this union.
 export type Biome = 'badlands' | 'volcanic' | 'crystal';
 
 /** Tile colors from maps.md, lighting from art-direction.md. Hex strings. */
@@ -168,7 +175,15 @@ export interface MapDef {
   readonly tiles: readonly (readonly Tile[])[];
   /** Each path runs spawn -> core. */
   readonly paths: readonly Path[];
+  /** Campaign waves. A run's actual list is buildWaves(map, waveCount) (src/data/waves.ts). */
   readonly waves: readonly WaveDef[];
+  /**
+   * Enemies that generated custom waves (GDD §15) may use, bosses included. Default: every enemy in `waves`.
+   * Set it only to add enemies the Campaign doesn't field (Dust Ridge adds anvil_tread for the heavy phase).
+   */
+  readonly roster?: readonly EnemyId[];
+  /** Path indices that generated heavy and boss groups may use. Default: all (Ossuary Deep keeps its sally port light). */
+  readonly heavyPaths?: readonly number[];
   /** Per-wave HP/shield growth base g_map (difficulty adds growthAdd). */
   readonly hpGrowth: number;
   /** Normal difficulty; scaled by DifficultyDef.startCashMult. */

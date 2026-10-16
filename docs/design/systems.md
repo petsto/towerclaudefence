@@ -189,3 +189,11 @@ Worked examples: Picket vs Anvil Tread (a4) = (6−4)×1 = 2/hit. Thumper vs Anv
 | Wave count / bosses | `enemies.md` §5: ~30 waves, bosses at 10/20/30 | 15/18/20 waves (per `maps.md`), boss at midpoint + final | `enemies.md` phasing should compress to the map's wave count proportionally |
 
 Open: whether Stasis slow should affect bosses at 50% (current) or 0%; whether Breacher missiles should retarget instead of fizzling (adds overkill tolerance; skipped for simplicity). Balance stage (6) tunes `g_map`, starting cash and the §8 assumptions with headless runs.
+
+## 10. Custom wave count (Stage 10)
+
+Spec lives in GDD §15 (`src/data/waves.ts`):
+
+- **Run length:** Campaign or 10–50 waves. Authored prefix plus boss closer for short runs; generated waves for long runs, heavies and bosses only from W41, multi-boss finale.
+- **HP growth:** halves its rate past the authored waves (`hpExponent`, `CUSTOM_GROWTH_TAIL` 0.5).
+- **Economy:** no new rules.

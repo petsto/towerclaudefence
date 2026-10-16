@@ -43,6 +43,14 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
     - Draw calls: 10–19 → 6–9.
     - Terrain GPU memory at 1440p: ~4 MB → 16–21 MB (720p ~5 MB, 5K 36–48 MB).
 - Stage 9 ✅ Command Powers (GDD §14): designer contract (be754ad) → parallel sim (b962915), UI (9fa46a4), FX/audio (f4d4951). Tremor Mines (Q, 30 s, 3 stored, 60% slow field) and Lance Strike (E, 150 s, 6 Plasma pulses, 20% of a boss); charging starts at wave 1 launch. Bots use powers; competent bot now wins Dust Ridge Brutal (accepted: easiest map, full kit).
+- Stage 10 🔄 (2026-10-16) UI revamp (StarCraft II style, reference `docs/design/reference/sc2-ui-states.webp`), 3 new maps, custom wave count (1–50, waves 41+ bosses/heavies only), Longshot Railgun range per level + L3 beam. Phases are ordered so no two agents edit the same file at once:
+  - **P0** (parallel). UI art director writes the spec in `docs/design/ui-revamp.md`. Systems designer writes the custom-wave and new-map design (GDD and `docs/design/maps.md`) plus the data/sim contract. Railgun agent works the full vertical slice (`towers.ts`, `fx.ts`, railgun model, sfx) and leaves the GDD to P3.
+  - **P1** (parallel). UI foundation engineer adds tokens and shared components and splits the CSS. Waves engineer implements data, sim, tests and the existing map files.
+  - **P2** (parallel).
+    - Home engineer: home screen, wave-count selector, `main.ts` wiring.
+    - HUD engineer: in-game HUD.
+    - Maps engineer: 3 map files, registration, `data.test.ts`, terrain biomes, `ui/thumbnail.ts`.
+  - **P3**. A QA + docs agent runs the full DoD and balance, browser-checks every map and flow, then refreshes GDD §3/§12/§13, architecture, AGENTS and README.
 
 ## Backlog (deferred until playtest says so)
 - **Sprite atlas memory** (user decides after playtesting; not started). Full roster at 128 px/unit ≈ 100 MB GPU; per-map bake (18 tower levels + that map's enemies only) is lower. Levers, cheapest first:

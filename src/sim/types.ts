@@ -173,6 +173,7 @@ export interface GameState {
   readonly lives: number;
   /** Most recently launched wave, -1 before the first CALL WAVE. */
   readonly waveIndex: number;
+  /** Run length: the map's authored count (Campaign) or the clamped custom count. Waves = buildWaves(MAPS[mapId], waveCount). */
   readonly waveCount: number;
   /** A launched wave is still spawning. */
   readonly waveActive: boolean;
@@ -213,6 +214,11 @@ export type CommandResult = { readonly ok: true } | { readonly ok: false; readon
 export interface SimConfig {
   readonly mapId: MapId;
   readonly difficultyId: DifficultyId;
+  /**
+   * Custom run length (GDD §15). undefined = Campaign (the map's authored waves). Rounded and clamped to
+   * [CUSTOM_WAVES_MIN, CUSTOM_WAVES_MAX]; the sim plays buildWaves(map, waveCount) and scales HP with hpExponent.
+   */
+  readonly waveCount?: number;
 }
 
 export interface Game {
