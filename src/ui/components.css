@@ -1,0 +1,559 @@
+/* Shared components (spec docs/design/ui-revamp.md §2). Source: docs/design/ui-mockup.html <style id="components">.
+   Class names are final; state goes through attributes (:checked, aria-pressed, aria-disabled, :disabled, data-ready). */
+/* ===== panel: chamfered frame. Never on focusable elements (clip-path clips outlines and glows). ===== */
+.panel {
+  position: relative;
+  isolation: isolate;
+  background: linear-gradient(180deg, var(--panel-edge-hi), var(--panel-edge-lo));
+  clip-path: var(--chamfer);
+  --cut: 10px;
+  /* declared here, not on :root, so it resolves against this element's --cut (console/modal override it) */
+  --chamfer: polygon(var(--cut) 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%, 0 var(--cut));
+}
+.panel::before { /* 1px frame: the fill sits 1px inside the clipped gradient */
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  clip-path: var(--chamfer);
+  background:
+    linear-gradient(180deg, rgba(120, 190, 255, 0.09), transparent 28px),
+    linear-gradient(180deg, var(--panel-hi), var(--panel-lo));
+}
+.panel::after { /* bright corner brackets, bottom corners */
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--line-hover), var(--line-hover)) left bottom / 14px 1px no-repeat,
+    linear-gradient(var(--line-hover), var(--line-hover)) left bottom / 1px 14px no-repeat,
+    linear-gradient(var(--line-hover), var(--line-hover)) right bottom / 14px 1px no-repeat,
+    linear-gradient(var(--line-hover), var(--line-hover)) right bottom / 1px 14px no-repeat;
+}
+.panel-h {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-3);
+  font: 700 var(--fs-h2)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.panel-h::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(87, 209, 255, 0.55), transparent);
+}
+
+/* ===== well: recessed readout area ===== */
+.well {
+  position: relative;
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, #000910, var(--well));
+  box-shadow: inset 0 0 0 1px #0a2238, inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ===== buttons ===== */
+.btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  height: 36px;
+  padding: 0 18px;
+  border: 1px solid;
+  border-radius: var(--r-1);
+  font: 700 var(--fs-btn)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--t) var(--ease), border-color var(--t) var(--ease), box-shadow var(--t) var(--ease), background var(--t) var(--ease);
+}
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.btn:disabled { cursor: not-allowed; }
+.btn-lg { height: 48px; padding: 0 32px; font-size: 16px; letter-spacing: 0.16em; }
+
+/* primary: gold */
+.btn-primary {
+  color: var(--gold-200);
+  border-color: var(--gold-500);
+  background: linear-gradient(180deg, #4a2a0c 0%, var(--gold-800) 42%, var(--gold-900) 100%);
+  text-shadow: 0 1px 0 #000;
+  box-shadow:
+    0 0 0 2px var(--gold-700),
+    0 0 0 3px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px var(--gold-600),
+    inset 0 1px 0 1px rgba(255, 214, 150, 0.12);
+}
+.btn-primary:hover {
+  color: var(--gold-100);
+  border-color: var(--gold-400);
+  box-shadow:
+    0 0 0 2px var(--gold-700),
+    0 0 0 3px rgba(0, 0, 0, 0.65),
+    0 0 12px rgba(255, 157, 42, 0.28),
+    inset 0 0 0 1px #8a5a1c,
+    inset 0 1px 0 1px rgba(255, 214, 150, 0.18);
+}
+.btn-primary:active,
+.btn-primary[aria-pressed='true'] {
+  color: var(--gold-100);
+  border-color: var(--gold-300);
+  background: linear-gradient(180deg, #6b3a0c, #3a1d05);
+  box-shadow: var(--glow-gold), inset 0 0 0 1px #a56a21, inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.btn-primary:disabled {
+  color: var(--gold-dis-text);
+  border-color: var(--gold-dis-line);
+  background: var(--gold-dis-fill);
+  text-shadow: none;
+  box-shadow: 0 0 0 2px #1d1818, 0 0 0 3px rgba(0, 0, 0, 0.65);
+}
+.btn-primary.is-pulsing:not(:disabled) { animation: sm-gold-pulse 2.4s ease-in-out infinite; }
+
+/* secondary: blue */
+.btn-secondary {
+  color: var(--blue-200);
+  border-color: var(--blue-500);
+  background: linear-gradient(180deg, #0a2a52 0%, var(--blue-800) 45%, var(--blue-900) 100%);
+  box-shadow:
+    0 0 0 2px #0f1f33,
+    0 0 0 3px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px var(--blue-700),
+    inset 0 1px 0 1px rgba(160, 210, 255, 0.1);
+}
+.btn-secondary:hover {
+  color: var(--blue-100);
+  border-color: var(--blue-400);
+  box-shadow:
+    0 0 0 2px #0f1f33,
+    0 0 0 3px rgba(0, 0, 0, 0.65),
+    0 0 12px rgba(47, 140, 255, 0.3),
+    inset 0 0 0 1px #2c5f94,
+    inset 0 1px 0 1px rgba(160, 210, 255, 0.16);
+}
+.btn-secondary:active,
+.btn-secondary[aria-pressed='true'] {
+  color: #fff;
+  border-color: var(--blue-300);
+  background: linear-gradient(180deg, #0f3871, #001d4a);
+  box-shadow: 0 0 0 2px #104082, 0 0 14px 2px rgba(47, 140, 255, 0.5), inset 0 0 0 1px #457cb7, inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.btn-secondary:disabled {
+  color: var(--blue-dis-text);
+  border-color: var(--blue-dis-line);
+  background: var(--blue-dis-fill);
+  box-shadow: 0 0 0 2px #0b1520, 0 0 0 3px rgba(0, 0, 0, 0.65);
+}
+/* danger flavour (Sell, Quit): blue at rest, red on hover/press */
+.btn-danger:hover:not(:disabled) { color: #ffd6d0; border-color: var(--danger-line); box-shadow: 0 0 0 2px #2a0e0c, 0 0 12px rgba(255, 42, 26, 0.3), inset 0 0 0 1px #6a1a14; }
+.btn-danger:active:not(:disabled) { color: #fff; border-color: var(--danger); background: linear-gradient(180deg, #5a1410, #2a0705); }
+
+/* chevron notch under a large CTA. The button needs margin-bottom >= 12px. */
+.btn-chevron::before,
+.btn-chevron::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  pointer-events: none;
+}
+.btn-chevron::before { top: calc(100% + 3px); width: 46px; height: 13px; background: var(--gold-700); }
+.btn-chevron::after {
+  top: calc(100% + 3px);
+  width: 22px;
+  height: 8px;
+  background: linear-gradient(180deg, var(--gold-100), var(--gold-glow) 60%, #bc5f06);
+  transition: filter var(--t) var(--ease);
+}
+.btn-chevron:hover::after, .btn-chevron:active::after { filter: brightness(1.25) drop-shadow(0 0 3px var(--gold-glow)); }
+.btn-chevron:disabled::before { background: #1d1818; }
+.btn-chevron:disabled::after { background: var(--gold-dis-line); filter: none; }
+.btn-secondary.btn-chevron::before { background: #0f1f33; }
+.btn-secondary.btn-chevron::after { background: linear-gradient(180deg, #9ad8ff, var(--blue-glow) 60%, #0c4a8a); }
+.btn-secondary.btn-chevron:disabled::after { background: var(--blue-dis-line); }
+
+/* icon button: square, secondary palette */
+.btn-icon { width: 32px; height: 32px; padding: 0; }
+.btn-icon svg { width: 16px; height: 16px; }
+
+/* keycap hint inside buttons and tiles */
+kbd, .kbd {
+  font: 700 10px/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.04em;
+  color: var(--gold-200);
+  padding: 2px 4px;
+  border: 1px solid var(--gold-600);
+  border-radius: var(--r-1);
+  background: rgba(0, 0, 0, 0.45);
+  text-shadow: none;
+}
+
+/* ===== tile: the selectable-state ladder (map cards, build buttons, power buttons) =====
+   Radio form:  <label><input class="sr-only" type="radio"><span class="tile">…</span></label>
+   Button form: <button class="tile" aria-pressed="false">…</button>
+   State API:   :checked / [aria-pressed=true] = selected · [aria-disabled=true] / :disabled = locked */
+.tile {
+  position: relative;
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, var(--surface-hi), var(--surface) 70%);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--line-halo), inset 0 0 0 1px var(--line-in), var(--bevel);
+  cursor: pointer;
+  transition: border-color var(--t) var(--ease), box-shadow var(--t-slow) var(--ease), background var(--t) var(--ease), color var(--t) var(--ease);
+}
+button.tile { font: inherit; padding: 0; }
+.tile:hover, label:hover > .tile {
+  border-color: var(--line-hover);
+  background: linear-gradient(180deg, var(--surface-hover), #00203f 75%);
+  color: var(--text-hover);
+  box-shadow: var(--glow-hover), inset 0 0 0 1px var(--line-hover-in), var(--bevel);
+}
+.tile:active { background: linear-gradient(0deg, var(--surface-hover), var(--surface)); }
+:checked + .tile,
+.tile[aria-pressed='true'] {
+  border-color: var(--line-sel);
+  background: linear-gradient(180deg, var(--surface-sel), #002a5c 60%, #001a3d);
+  color: var(--text-sel);
+  box-shadow: var(--glow-select), inset 0 0 0 1px var(--line-sel-in), inset 0 1px 0 1px rgba(185, 243, 255, 0.35);
+}
+/* gold corner check = "this is what will launch" (radio tiles only) */
+:checked + .tile::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M0 0H24V24Z' fill='%23f7c06e' fill-opacity='.28'/%3E%3Cpath d='M.5 .5H23.5V23.5' fill='none' stroke='%23f7c06e'/%3E%3Cpath d='M11 6.5l3 3 6.5-7' fill='none' stroke='%23ffe3ad' stroke-width='2'/%3E%3C/svg%3E");
+}
+:focus-visible + .tile, .tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+:disabled + .tile,
+.tile[aria-disabled='true'],
+.tile:disabled {
+  border-color: var(--line-locked);
+  background: var(--surface-locked);
+  color: var(--text-locked);
+  box-shadow: inset 0 0 0 1px var(--line-locked-in);
+}
+:disabled + .tile, .tile:disabled { cursor: not-allowed; }
+.tile[aria-disabled='true'] .tile-art, :disabled + .tile .tile-art { opacity: 0.4; filter: grayscale(0.6); }
+/* a locked tile that is also selected (build mode armed, then credits dropped) keeps the selected frame */
+.tile[aria-disabled='true'][aria-pressed='true'] { border-color: var(--line-sel); box-shadow: var(--glow-select); }
+
+/* ===== segmented control (difficulty, wave mode) =====
+   <div class="seg" role="radiogroup"><label><input class="sr-only" type="radio"><span>Veteran</span></label>…</div> */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: var(--well);
+  box-shadow: 0 0 0 1px var(--line-halo);
+}
+.seg > label { flex: 1; cursor: pointer; }
+.seg > label + label > span { box-shadow: inset 1px 0 0 var(--line-in); }
+.seg > label > span {
+  display: block;
+  padding: 9px 14px;
+  text-align: center;
+  font: 700 var(--fs-btn)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  white-space: nowrap;
+  transition: color var(--t) var(--ease), background var(--t) var(--ease), box-shadow var(--t) var(--ease);
+}
+.seg > label:hover > span { color: var(--text-hover); background: var(--surface-hover); }
+.seg :checked + span {
+  color: #fff;
+  background: linear-gradient(180deg, #0f3871, #001d4a);
+  box-shadow: inset 0 0 0 1px var(--line-sel), 0 0 12px rgba(8, 80, 170, 0.9);
+  position: relative;
+}
+.seg :focus-visible + span { outline: 2px solid var(--focus); outline-offset: 2px; position: relative; }
+.seg :disabled + span { color: var(--text-locked); cursor: not-allowed; }
+
+/* ===== range slider (custom wave count) =====
+   JS sets --val (fill %) and --zone (start % of the heavy zone) on the input. */
+.range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
+  margin: 10px 0;
+  border: 1px solid var(--bar-line);
+  border-radius: 1px;
+  background: /* top to bottom: heavy-zone hatch, fill, track */
+    repeating-linear-gradient(-45deg, rgba(255, 107, 92, 0.6) 0 3px, transparent 3px 6px) right / calc(100% - var(--zone, 100%)) 100% no-repeat,
+    linear-gradient(90deg, var(--bar-hi), var(--bar-lo)) 0 0 / var(--val, 50%) 100% no-repeat,
+    var(--bar-track);
+  cursor: pointer;
+}
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 22px;
+  border: 1px solid var(--line-sel);
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, #1e5fa8, #0a2f5e);
+  box-shadow: 0 0 0 1px #000, 0 0 8px rgba(47, 140, 255, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.range::-moz-range-thumb {
+  width: 12px;
+  height: 20px;
+  border: 1px solid var(--line-sel);
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, #1e5fa8, #0a2f5e);
+  box-shadow: 0 0 0 1px #000, 0 0 8px rgba(47, 140, 255, 0.6);
+}
+.range:hover::-webkit-slider-thumb { border-color: #fff; }
+.range:focus-visible { outline: 2px solid var(--focus); outline-offset: 6px; }
+.range:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ===== checkbox (consumer: pause modal "Sound") ===== */
+.check { display: inline-flex; align-items: center; gap: var(--sp-2); cursor: pointer; color: var(--text); }
+.check-box {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: var(--well);
+  box-shadow: 0 0 0 1px var(--line-halo);
+}
+.check:hover .check-box { border-color: var(--line-hover); }
+.check :checked + .check-box { border-color: var(--line-sel); box-shadow: 0 0 6px rgba(47, 140, 255, 0.6); }
+.check :checked + .check-box::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  width: 5px;
+  height: 10px;
+  border: solid var(--text-hover);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.check :focus-visible + .check-box { outline: 2px solid var(--focus); outline-offset: 2px; }
+.check :disabled + .check-box { border-color: var(--line-locked); background: var(--surface-locked); box-shadow: none; }
+
+/* ===== resource readout ===== */
+.res { display: inline-flex; align-items: center; gap: 6px; }
+.res-ico { width: 18px; height: 18px; flex: none; }
+.res-ico svg { display: block; width: 100%; height: 100%; }
+.res-val {
+  font: 600 var(--fs-num)/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 0 6px rgba(87, 209, 255, 0.35);
+}
+.res-label {
+  font: 700 var(--fs-label)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.res-credits .res-ico { color: var(--cyan); filter: drop-shadow(0 0 3px rgba(87, 209, 255, 0.8)); }
+.res-lives .res-ico { color: var(--text); }
+.res.is-low .res-ico, .res.is-low .res-val { color: var(--danger); text-shadow: 0 0 6px var(--danger-glow); animation: sm-blink 1s steps(1) infinite; }
+
+/* ===== progress / HP bars with tick markers ===== */
+.bar {
+  position: relative;
+  height: 8px;
+  border: 1px solid var(--bar-line);
+  border-radius: 1px;
+  background: var(--bar-track);
+}
+.bar-fill {
+  height: 100%;
+  background: linear-gradient(180deg, var(--bar-hi), var(--bar-lo));
+  box-shadow: 0 0 6px rgba(47, 140, 255, 0.45);
+  transition: width 0.15s linear;
+}
+.bar-danger .bar-fill { background: linear-gradient(180deg, var(--danger-hi), var(--danger-lo)); box-shadow: 0 0 6px rgba(255, 42, 26, 0.45); }
+.bar-shield { height: 5px; }
+.bar-shield .bar-fill { background: linear-gradient(180deg, var(--shield-hi), var(--shield-lo)); }
+.bar-tick { /* style="left: 40%" */
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 4px;
+  margin-left: -2px;
+  background: linear-gradient(180deg, var(--tick-hi), var(--tick) 40%, #8f8a06);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+}
+.bar-tick.is-past { filter: saturate(0.3) brightness(0.6); }
+
+/* ===== circular badge: wave number, tower level, map tier ===== */
+.badge {
+  --size: 28px;
+  --ring: var(--badge-blue-ring);
+  --disc: var(--badge-blue-disc);
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  font: 800 calc(var(--size) * 0.46)/1 var(--font-display);
+  font-stretch: var(--wide);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 1px 0 #000;
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--disc), #fff 22%) 0, var(--disc) 55%, #00040c 100%);
+  box-shadow:
+    0 0 0 2px var(--ring),
+    0 0 0 3px rgba(0, 0, 0, 0.8),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.55),
+    0 0 8px color-mix(in srgb, var(--ring), transparent 45%);
+}
+.badge-white { --ring: var(--badge-white-ring); --disc: var(--badge-white-disc); }
+.badge-gold { --ring: var(--badge-gold-ring); --disc: var(--badge-gold-disc); color: #fff3e2; }
+.badge-violet { --ring: var(--badge-violet-ring); --disc: var(--badge-violet-disc); }
+
+/* ===== chip: damage type, enemy tags ===== */
+.chip {
+  display: inline-block;
+  padding: 2px 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--r-1);
+  font: 700 10px/1.2 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.chip[data-type='normal'] { color: var(--dt-normal); }
+.chip[data-type='concussive'] { color: var(--dt-concussive); }
+.chip[data-type='explosive'] { color: var(--dt-explosive); }
+.chip[data-type='plasma'] { color: var(--dt-plasma); }
+
+/* ===== tip card: info-panel tooltip (tower / power schematics) ===== */
+.tip {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-hover);
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, rgba(0, 48, 84, 0.55), rgba(1, 11, 19, 0.92));
+  box-shadow: 0 0 10px rgba(8, 80, 170, 0.4);
+}
+.tip-title {
+  font: 700 15px/1.1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+/* ===== list row: label/value pairs (intel, end-screen stats) ===== */
+.rows { display: grid; gap: 3px; margin: 0; }
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 28px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line-faint);
+  border-radius: var(--r-1);
+  background: linear-gradient(90deg, rgba(0, 32, 62, 0.85), rgba(0, 22, 47, 0.35));
+}
+.row dt, .row-k {
+  font: 700 var(--fs-label)/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.row dd, .row-v { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; color: #fff; text-align: right; }
+
+/* ===== modal ===== */
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: radial-gradient(ellipse at center, rgba(2, 18, 36, 0.62), rgba(1, 6, 12, 0.88));
+  pointer-events: auto;
+}
+.modal {
+  width: min(400px, 100%);
+  max-height: calc(100% - 32px);
+  overflow: auto;
+  padding: var(--sp-5) var(--sp-5) 28px;
+  text-align: center;
+  --cut: 14px;
+}
+.modal-title {
+  margin: 0;
+  font: 800 30px/1 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 14px rgba(87, 209, 255, 0.55);
+}
+.modal-sub {
+  margin: 10px 0 var(--sp-5);
+  font: 700 var(--fs-label)/1.3 var(--font-display);
+  font-stretch: var(--wide);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+.modal-actions { display: grid; gap: 14px; }
+.modal-actions .btn { width: 100%; }
+
+/* ===== LEGACY (P1 bridge): keeps today's home.ts/hud.ts markup usable until P2 moves it onto the
+   classes above. Delete this block once nothing uses `.screen` or a bare `.btn` (P3 greps). ===== */
+/* old CRT readout box: now the well look */
+.screen {
+  position: relative;
+  border-radius: var(--r-1);
+  background: linear-gradient(180deg, #000910, var(--well));
+  box-shadow: inset 0 0 0 1px #0a2238, inset 0 2px 6px rgba(0, 0, 0, 0.6);
+  color: var(--text-body);
+}
+/* a .btn with no variant: secondary palette, but the old sizing (the layout sets heights, normal width) */
+.btn:not(.btn-primary, .btn-secondary) {
+  height: auto;
+  padding: 0 12px;
+  font-stretch: normal;
+  white-space: normal;
+  color: var(--blue-200);
+  border-color: var(--blue-500);
+  background: linear-gradient(180deg, #0a2a52 0%, var(--blue-800) 45%, var(--blue-900) 100%);
+  box-shadow: 0 0 0 1px #000, inset 0 0 0 1px var(--blue-700);
+}
+.btn:not(.btn-primary, .btn-secondary):hover {
+  color: var(--blue-100);
+  border-color: var(--blue-400);
+  box-shadow: 0 0 0 1px #000, 0 0 10px rgba(47, 140, 255, 0.3), inset 0 0 0 1px #2c5f94;
+}
+.btn:not(.btn-primary, .btn-secondary):active {
+  color: #fff;
+  border-color: var(--blue-300);
+  background: linear-gradient(180deg, #0f3871, #001d4a);
+}
+.btn:not(.btn-primary, .btn-secondary):disabled {
+  color: var(--blue-dis-text);
+  border-color: var(--blue-dis-line);
+  background: var(--blue-dis-fill);
+  box-shadow: 0 0 0 1px #000;
+}

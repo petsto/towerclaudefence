@@ -43,3 +43,14 @@ export const cap = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1)
 /** `<dt>`/`<dd>` pairs for a `<dl>`. */
 export const dlRows = (rows: readonly [string, string][]): HTMLElement[] =>
   rows.flatMap(([k, v]) => [h('dt', '', {}, k), h('dd', '', {}, v)]);
+
+export type BadgeTone = 'blue' | 'white' | 'gold' | 'violet';
+
+/** Circular `.badge` (wave number, tower level, map tier). `size` in px sets `--size` (CSS default 28). */
+export function badge(text: string, tone: BadgeTone = 'blue', size?: number): HTMLSpanElement {
+  return h('span', tone === 'blue' ? 'badge' : `badge badge-${tone}`, { style: size ? `--size:${size}px` : undefined }, text);
+}
+
+/** Rank ladder shared by tower level and map tier: 1 blue, 2 white, 3 gold, 4+ violet. */
+export const rankTone = (n: number): BadgeTone =>
+  n >= 4 ? 'violet' : n === 3 ? 'gold' : n === 2 ? 'white' : 'blue';

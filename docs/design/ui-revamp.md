@@ -96,6 +96,8 @@ The reference's subtitle blue `#187da3` measures 3.9:1 on `--surface`, so it is 
 --cut: 10px;   /* console 14px, modal 14px, small 6px */
 ```
 
+`--chamfer` is declared on `.panel` itself, not on `:root`: a `var()` inside a custom property resolves where it is declared, so a `:root` declaration would freeze `--cut` at 10px and ignore per-element overrides (the mockup has this bug; `components.css` fixes it).
+
 How the 1 px chamfered frame is built:
 
 - the element's background is the frame gradient (`--panel-edge-hi` → `--panel-edge-lo`), clipped;
@@ -261,7 +263,7 @@ Both screens and both P2 engineers share this. Class names below are final.
 .home-maplist { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
 ```
 
-- **Map cards scale to 6 and more** through `auto-fill`. The maps panel scrolls internally (`overflow: auto`) if the cards outgrow it. At 1280 px that's 4 per row, so 6 maps take 2 rows.
+- **Map cards scale to 6 and more** through `auto-fill`. If the cards outgrow the panel, `.home-maplist` scrolls (`min-height: 0; overflow: auto`), never the `.panel` itself (§7). At 1280 px that's 4 per row, so 6 maps take 2 rows.
 - **Card content:**
   - `.tile-art`: a `--well` letterbox with `aspect-ratio: 3/2`, holding the thumbnail canvas (`width: 100%; height: 100%; object-fit: contain`);
   - a tier badge (24 px) at the art's bottom-right;
@@ -283,13 +285,13 @@ Both screens and both P2 engineers share this. Class names below are final.
 WAVES   [ CAMPAIGN · 15 | CUSTOM ]                      ← .seg, 2 options
         ( − ) [ 44 ] ( + )                         (!)  ← shown only for Custom
         ▕██████████████████████████████████▌░░░░╱╱╱╱╱▏  ← .range; hatched zone from wave 41
-        1     10      20      30      41▲    50          ← tick labels, 41 in --tick yellow
+        10       20       30       41▲      50           ← tick labels, 41 in --tick yellow
         Waves 41–44: bosses and heavies only              ← --danger, only when value ≥ 41
 ```
 
 - **Campaign** is the default: the map's authored wave count, and its label shows that count.
 - **Custom** reveals the stepper and range. Its first value is the campaign count, clamped to [min, max].
-- **Range is 1–50 for now.** min, max and the heavy threshold come from data constants supplied by the systems designer's contract (§6.5). Never hard-code them; the ticks and `--zone` derive from them.
+- **Range is 10–50.** min, max and the heavy threshold are `CUSTOM_WAVES_MIN` (10), `CUSTOM_WAVES_MAX` (50) and `HEAVY_ONLY_FROM` (41) in `src/data/waves.ts` (§6.5). Never hard-code them; the ticks and `--zone` derive from them. Every map's authored count lies inside the range, so the clamp is a no-op today.
   - `--val = (v - min) / (max - min) * 100%`
   - `--zone = (heavyFrom - min) / (max - min) * 100%`
 - **Heavy hint at two levels:**
@@ -604,8 +606,8 @@ This is the SC-authentic command-card swap: select a structure and the card show
 | `src/ui/styles.css` | **P1** | deleted after the split |
 | `src/ui/index.ts` | **P1** | CSS imports (§6.2) |
 | `src/ui/dom.ts` | **P1** | add `badge(text: string, tone?: 'blue' \| 'white' \| 'gold' \| 'violet', size?: number): HTMLSpanElement` (both screens use it). P2 doesn't edit `dom.ts`: if a helper is needed, write it locally and P3 consolidates. |
-| `src/ui/home.ts` | P1: one import line only · then **P2 home** | |
-| `src/ui/hud.ts`, `src/ui/icons.ts` | P1: one import line only (hud.ts) · then **P2 HUD** | |
+| `src/ui/home.ts` | **P2 home** (P1 left it untouched) | |
+| `src/ui/hud.ts`, `src/ui/icons.ts` | **P2 HUD** (P1 left them untouched) | |
 | `src/main.ts` | **P2 home** (per PLAN: wave-count wiring) | the HUD engineer doesn't touch it; `Hud` changes stay additive (`flash` kind). The home engineer passes `'warn'` for boss `waveStart` and `'good'` for `waveClear` (2 lines). |
 | `src/ui/thumbnail.ts` | P2 **maps** engineer (new biomes) | home only calls it; it doesn't edit it |
 | `dev/ui.ts` | P2 HUD (only if needed) | e.g. `#devbar` `top` in `dev/ui.html` if the new top bar overlaps it. That's a dev-only cosmetic. |
@@ -619,13 +621,15 @@ P1 finishes and merges before P2 starts, so P1's one-line edits to `home.ts`/`hu
 ```ts
 import './tokens.css';
 import './components.css';
+import './home.css';
+import './hud.css';
 
 export { createHomeScreen } from './home';
 export { createHud } from './hud';
 export type { Hud } from './hud';
 ```
 
-`home.ts` gets `import './home.css';` and `hud.ts` gets `import './hud.css';`, each at the top. Vite bundles CSS in module-graph order, so the order above is deterministic. `dev/ui.ts` imports `../src/ui`, so the sandbox gets all four files with no changes.
+All four imports live in `index.ts` (as built in P1), so `home.ts`/`hud.ts` needed no edits. Nothing imports `home.ts` or `hud.ts` except through `index.ts` (`main.ts` and `dev/ui.ts` both import the barrel), and Vite bundles CSS in module-graph order, so the order is deterministic. A P2 engineer may move a screen's import into its `.ts` if they prefer; keep the order.
 
 **Scoping:**
 
@@ -656,7 +660,14 @@ export type { Hud } from './hud';
    ```
 
    Old `.screen` / `.scanlines` uses in `home.ts`/`hud.ts` will render unstyled-ish until P2. That's acceptable mid-stage. P1 may alias `.screen` to the `.well` look in `components.css` under the LEGACY comment.
-5. Add `badge()` to `dom.ts`.
+5. Add `badge()` to `dom.ts` (plus `rankTone(n)`: 1 blue, 2 white, 3 gold, 4+ violet, shared by tower level and map tier).
+
+**As built (P1 notes for P2):**
+
+- The moved rules are verbatim except for three fixes forced by the new `.panel` (its fill is a `::before`): the console's old lit-seam `::before` was dropped and `.hud-console` now sets `--cut: 14px` instead of a `clip-path !important`; the map card's selected/focus styles paint on `.map-card-body::before`; `.home-maps` no longer scrolls, `.home-maplist` does.
+- `components.css` ends with a **LEGACY** block: `.screen` gets the well look, and a `.btn` with neither `.btn-primary` nor `.btn-secondary` gets the secondary palette at the old sizing (`height: auto`, `font-stretch: normal`, wrapping). Every button in today's `home.ts`/`hud.ts` is such a bare `.btn`; delete the block once P2 has given each a variant.
+- `.scanlines` has no rule any more; the class can simply be dropped from markup.
+- The shared `.dim` rule moved into `hud.css` (home doesn't use it). `sm-blink` lives in `tokens.css`; `sm-pulse` moved to `home.css`; `sm-flicker`, `sm-static`, `sm-pow-ready` to `hud.css`.
 6. Run typecheck, test and build. Browser-check that both screens render and are usable (a mixed look is OK) with no console errors.
 
 ### 6.4 Hooks that must survive
@@ -674,11 +685,11 @@ export type { Hud } from './hud';
 
 ### 6.5 Contract dependencies (systems designer / waves engineer)
 
-The UI needs these from the custom-wave contract. Names are placeholders; use what the contract defines.
+Settled names (custom-wave contract, GDD §15):
 
-1. **A `SimConfig` field for the wave count,** absent or `undefined` meaning Campaign. The home passes it; `main.ts` and `dev/ui.ts` forward `cfg` unchanged.
-2. **Data constants for min (assumed 1), max (50) and the heavy threshold (41).** Home reads them; nothing hard-coded.
-3. **The resolved wave list for a run** (e.g. `GameState.waves` or a pure `resolveWaves(map, count)` in `src/data`). **This is a must-have.** Today `hud.ts` reads `MAPS[s.mapId].waves[s.waveIndex + 1]` for the incoming list, which is wrong once the count differs from the authored list. The top-bar ticks also need the boss-wave indices.
+1. **`SimConfig.waveCount?: number`.** `undefined` means Campaign. The home passes it; `main.ts` and `dev/ui.ts` forward `cfg` unchanged. `GameState.waveCount` is the resolved run length.
+2. **Constants in `src/data/waves.ts`:** `CUSTOM_WAVES_MIN = 10`, `CUSTOM_WAVES_MAX = 50`, `HEAVY_ONLY_FROM = 41` (1-based), plus `clampWaveCount(n)`. Home reads them; nothing hard-coded.
+3. **The resolved wave list:** `buildWaves(MAPS[mapId], waveCount)` in `src/data/waves.ts`. **This is a must-have.** Today `hud.ts` reads `MAPS[s.mapId].waves[s.waveIndex + 1]` for the incoming list, which is wrong once the count differs from the authored list. The top-bar ticks also need the boss-wave indices. P2 does this wiring.
 
 ---
 
@@ -689,6 +700,7 @@ The UI needs these from the custom-wave contract. Names are placeholders; use wh
 - **Saira's width axis needs the range in the font URL** (§1.4).
 - **WAAPI ignores the CSS reduced-motion kill switch** (§5).
 - **`aria-disabled`, not `disabled`, for locked tiles.** They must stay clickable to flash the reason, and focusable.
+- **Never put `overflow: auto` on a `.panel`.** Its fill is an absolutely positioned `::before`, which scrolls away with the content and exposes the bright frame gradient. Scroll an inner element instead.
 - **`[hidden]` needs the `display: none !important` rule** (kept in `tokens.css`), because components set `display`.
 - **Canvas thumbnails:** `drawMapThumbnail` sets `canvas.width/height` to cols×px. CSS sizes it with `width: 100%; height: 100%; object-fit: contain`. Don't set `image-rendering: pixelated` (they're smooth rasters).
 - **`color-mix()` (badge glow)** needs Chrome 111, Safari 16.2 or Firefox 113 or newer. That's fine for this project.
@@ -697,7 +709,7 @@ The UI needs these from the custom-wave contract. Names are placeholders; use wh
 
 ## 8. Open questions
 
-1. **Wave-count bounds and the field name:** this spec assumes 1–50 with heavy from 41. The systems designer is finalising the minimum and the field name. Only data constants change.
+1. ~~Wave-count bounds and the field name.~~ Resolved: `SimConfig.waveCount`, custom range 10–50, heavy from 41 (§6.5).
 2. **Map tiers for the 3 new maps:** the badge tones cover tiers 1–4+. If a new map is tier 4, it is violet.
 3. **Muting on phones** lives only in the pause menu. If the user wants it on the top bar at 375 px, the speed button has to go into the pause menu instead.
 4. **GDD §9/§11 and `art-direction.md` §7** still describe the SC1 console fonts and look. P3 refreshes them; this spec supersedes them for UI.

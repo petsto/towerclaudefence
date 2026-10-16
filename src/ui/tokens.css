@@ -1,0 +1,179 @@
+/* Design tokens + base (spec docs/design/ui-revamp.md §1). Source: docs/design/ui-mockup.html <style id="tokens">. */
+:root {
+  /* ---- surfaces (deep navy) ---- */
+  --bg-0: #020c16;            /* page floor, modal backdrop base */
+  --bg-1: #061a2e;            /* home backdrop mid */
+  --bg-2: #0a2444;            /* home backdrop glow */
+  --surface-locked: #04121f;
+  --surface: #00162f;         /* control fill, bottom */
+  --surface-hi: #00203e;      /* control fill, top */
+  --surface-hover: #003054;
+  --surface-sel: #013984;
+  --well: #010b13;            /* recessed readouts */
+  --panel-hi: rgba(10, 36, 66, 0.96);
+  --panel-lo: rgba(3, 16, 32, 0.97);
+
+  /* ---- lines: the state ladder (sampled from the reference tiles) ---- */
+  --line-locked: #223241;
+  --line-locked-in: #152331;
+  --line-halo: #093153;       /* 1px outside a normal control */
+  --line: #3b6990;            /* normal border */
+  --line-in: #21496c;         /* normal inner bevel */
+  --line-hover: #60a0c8;
+  --line-hover-in: #367097;
+  --line-hover-halo: #104665;
+  --line-sel: #95dcff;
+  --line-sel-hi: #b9f3ff;
+  --line-sel-in: #5c9dd0;
+  --line-faint: #14304d;      /* list rows, dividers */
+  --panel-edge-hi: #2c5a85;   /* panel frame gradient */
+  --panel-edge-lo: #12304f;
+  --glow-sel: #0850aa;
+
+  /* ---- text (reference legend; dim values raised to pass 4.5:1) ---- */
+  --text-locked: #62839a;     /* 4.7:1 on --surface-locked */
+  --text-dim: #6b8aa3;        /* 5.0:1 on --surface */
+  --text: #8dbfea;            /* 9.3:1 */
+  --text-body: #b8d4ec;       /* 11.8:1 */
+  --text-hover: #cce7ff;
+  --text-sel: #ffffff;
+  --cyan: #57d1ff;            /* headers, specials, credits icon */
+  --cyan-dim: #2a9fd0;        /* 6.0:1; #187da3 (reference) is lines-only, 3.9:1 */
+
+  /* ---- positive (reference "purchasable" green) ---- */
+  --pos: #1fad29;
+  --pos-hover: #3dd447;
+  --pos-sel: #4df458;
+  --pos-pale: #ccffd0;
+
+  /* ---- gold: primary CTA, costs, "equipped" mark ---- */
+  --gold-100: #ffe3ad;        /* text, pressed / selected */
+  --gold-200: #eed5a0;        /* text, normal (11.6:1 on --gold-800) */
+  --gold-300: #f7c06e;        /* border, pressed / selected */
+  --gold-400: #cca05d;        /* border, hover */
+  --gold-500: #8c6937;        /* border, normal */
+  --gold-600: #6d4515;        /* inner bevel */
+  --gold-700: #3a2413;        /* gunmetal-bronze casing */
+  --gold-800: #321705;        /* fill top */
+  --gold-900: #1a0901;        /* fill bottom */
+  --gold-glow: #ff9d2a;
+  --cost: #cf9d3d;            /* "equipped normal": 7.4:1 */
+  --cost-hi: #ffce71;
+  --gold-dis-line: #3e3630;
+  --gold-dis-fill: #1a1612;
+  --gold-dis-text: #8a8178;
+
+  /* ---- blue: secondary CTA ---- */
+  --blue-100: #d8ecff;
+  --blue-200: #9dbddb;        /* text, normal (8.4:1 on --blue-800) */
+  --blue-300: #98d1ff;        /* border, pressed / selected */
+  --blue-400: #5b8fc6;        /* border, hover */
+  --blue-500: #3f6080;        /* border, normal */
+  --blue-700: #1e436b;        /* inner bevel */
+  --blue-800: #041f3f;        /* fill top */
+  --blue-900: #00081a;        /* fill bottom */
+  --blue-glow: #2f8cff;
+  --blue-dis-line: #2b3a4c;
+  --blue-dis-fill: #08121e;
+  --blue-dis-text: #5d7186;
+
+  /* ---- danger ---- */
+  --danger: #ff6b5c;          /* text, 6.5:1 */
+  --danger-line: #c0281e;
+  --danger-hi: #ff6a4a;       /* boss HP fill top */
+  --danger-lo: #b3180c;       /* boss HP fill bottom */
+  --danger-glow: #ff2a1a;
+
+  /* ---- bars & ticks ---- */
+  --bar-track: #002234;
+  --bar-line: #0d2c48;
+  --bar-hi: #2a7fd6;
+  --bar-lo: #0a56a8;
+  --shield-hi: #9ad8ff;
+  --shield-lo: #2f7cff;
+  --tick: #d9d21c;
+  --tick-hi: #f4ee7a;
+
+  /* ---- level / tier badges: ring + disc ---- */
+  --badge-blue-ring: #74b6fd;   --badge-blue-disc: #002c6c;
+  --badge-white-ring: #dbf1ff;  --badge-white-disc: #0a2a5f;
+  --badge-gold-ring: #fec793;   --badge-gold-disc: #4e270d;
+  --badge-violet-ring: #a9b0dc; --badge-violet-disc: #252958;
+
+  /* ---- game semantics (unchanged meaning) ---- */
+  --dt-normal: #c8d0d8;
+  --dt-concussive: #38e0d0;
+  --dt-explosive: #ff8a3a;
+  --dt-plasma: #c48cff;
+  --chorus: #ff3ab0;
+  --remnant: #8cff4a;
+
+  --focus: #ffe3ad;
+
+  /* ---- glow / bevel recipes ---- */
+  --bevel: inset 0 1px 0 rgba(160, 210, 255, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.55);
+  --glow-hover: 0 0 0 1px var(--line-hover-halo), 0 0 8px rgba(47, 140, 255, 0.25);
+  --glow-select: 0 0 0 1px #0d4f9a, 0 0 6px 1px rgba(8, 80, 170, 0.95), 0 0 18px 4px rgba(8, 80, 170, 0.55);
+  --glow-gold: 0 0 0 2px #774307, 0 0 14px 2px rgba(255, 157, 42, 0.5);
+  /* --chamfer is declared on .panel (components.css): a var() inside a custom property resolves where it is
+     declared, so on :root it would freeze --cut at 10px and ignore per-panel overrides. */
+
+  /* ---- type ---- */
+  --font-display: 'Saira', 'Eurostile', 'Microgramma', Verdana, sans-serif; /* always with font-stretch: var(--wide) */
+  --font-body: 'Saira', 'Segoe UI', system-ui, sans-serif;
+  --wide: 125%;
+  --fs-hero: clamp(30px, 6vw, 72px);
+  --fs-h1: 24px;
+  --fs-h2: 12px;      /* panel headers */
+  --fs-label: 11px;   /* caps labels; never smaller */
+  --fs-btn: 13px;
+  --fs-body: 14px;
+  --fs-small: 12px;
+  --fs-num: 18px;     /* readouts */
+
+  /* ---- space, radii, motion, layers ---- */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --r-1: 2px; --r-2: 4px;
+  --cut: 10px; --cut-sm: 6px;
+  --t-fast: 90ms; --t: 140ms; --t-slow: 220ms;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --z-hud: 10; --z-floats: 20; --z-toast: 30; --z-modal: 50; --z-home: 100;
+}
+
+.sm-home, .sm-hud {
+  font: 500 var(--fs-body)/1.35 var(--font-body);
+  color: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+.sm-home [hidden], .sm-hud [hidden] { display: none !important; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.num { font-variant-numeric: tabular-nums; }
+
+@keyframes sm-blink { 50% { opacity: 0.3; } }
+@keyframes sm-gold-pulse {
+  50% { box-shadow: 0 0 0 2px #774307, 0 0 0 3px #000a, 0 0 18px 3px rgba(255, 157, 42, 0.45), inset 0 0 0 1px var(--gold-600); }
+}
+@keyframes sm-ready-burst {
+  0% { box-shadow: 0 0 0 1px var(--line-sel), 0 0 0 0 rgba(87, 209, 255, 0.9); }
+  100% { box-shadow: 0 0 0 1px var(--line-sel), 0 0 0 12px rgba(87, 209, 255, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sm-home *, .sm-hud *,
+  .sm-home *::before, .sm-home *::after,
+  .sm-hud *::before, .sm-hud *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* LEGACY: old SC1 variable names, so home.css/hud.css resolve until P2 rewrites them. Delete when unused (P3 greps). */
+:root {
+  --metal-900: var(--surface-locked); --metal-800: var(--surface); --metal-700: var(--surface-hi); --metal-600: #0f3871; --metal-400: var(--line);
+  --bevel-hi: rgba(160, 210, 255, 0.14); --bevel-lo: rgba(0, 0, 0, 0.55);
+  --readout: var(--text-body); --readout-dim: var(--text-dim); --teal: var(--cyan); --amber: var(--cost-hi);
+  --text-hi: #fff; --font-mono: var(--font-body); --font-ui: var(--font-body); --font-title: var(--font-display);
+}
