@@ -61,8 +61,35 @@ function ground(biome: Biome, p: MapPalette, seed: number): TexSet {
   const dark = rgb(p.decor);
   const { s, glow } = paint((u, v) => {
     const grain = fbm(u, v, 48, seed, 2), mid = fbm(u, v, 8, seed + 1);
-    // TODO(stage10-terrain): frost borrows badlands, marsh falls through to crystal (placeholder looks).
-    if (biome === 'badlands' || biome === 'frost') {
+    if (biome === 'frost') {
+      // wind-packed snow crust: long low sastrugi ridges (3:1 along +x), faint sparkle grain, sparse blue-black ice
+      // patches (glassy, sunk). Mid grey-blue from the palette, so it never blows out next to units and the lane.
+      const ridge = fbm(u, v * 3, 3, seed + 3), sharp = 1 - Math.abs(fbm(u, v * 3, 5, seed + 4) * 2 - 1);
+      const sparkle = hash(Math.floor(u * N), Math.floor(v * N), seed + 5) - 0.5;
+      // ice: irregular fbm blobs (~10% of the area), soft-edged, glassy and only a third of the way toward decor, so the
+      // 2-tile repeat of the texture never reads as a dot grid
+      const ice = sstep(0.6, 0.66, fbm(u, v, 3, seed + 7) * 0.75 + fbm(u, v, 9, seed + 8) * 0.25);
+      let c = mul(base, 1 + (ridge - 0.5) * 0.16 + (sharp - 0.5) * 0.08 + (mid - 0.5) * 0.1 + sparkle * 0.08);
+      c = mix(c, mul(mix(base, dark, 0.4), 0.95 + grain * 0.1), ice * 0.32);
+      return [(ridge - 0.5) * 0.6 + sharp * 0.15 + grain * 0.05 - ice * 0.2, c, 0.85 - ice * 0.55, 0];
+    }
+    if (biome === 'marsh') {
+      // black-green peat: stagnant pools (flat, glassy, algae sheen), groundAlt scum blotches, dead-reed stubble, all
+      // wet (roughness 0.5). Rare toxic bubbles in the pools glow accent (gated by the mask's sparse glow region).
+      const alt = rgb(p.groundAlt);
+      // pools: irregular fbm blobs (~10%), not worley discs, so the 2-tile texture repeat never reads as a dot grid
+      const pool = sstep(0.6, 0.64, fbm(u, v, 3, seed + 3) * 0.6 + fbm(u, v, 8, seed + 9) * 0.4) * 0.7;
+      const scum = sstep(0.5, 0.7, fbm(u, v, 3, seed + 4));
+      const reed = pebbles(u, v, 110, seed + 5, 0.22);
+      const bub = pebbles(u, v, 40, seed + 8, 0.25);
+      const bubOn = bub.tone > 0.97 ? bub.h * pool : 0;
+      let c = mul(base, 0.95 + (mid - 0.5) * 0.3 + (grain - 0.5) * 0.16);
+      c = mix(c, alt, scum * 0.35);
+      if (reed.tone > 0.55) c = mix(c, mul(dark, 0.8), sstep(0, 0.4, reed.h) * 0.7);
+      c = mix(c, mix(mul(base, 0.55), alt, 0.3), pool);
+      return [mid * 0.35 + grain * 0.15 + reed.h * 0.1 * (1 - pool) - pool * 0.25 + bubOn * 0.2, c, 0.5 - pool * 0.38 + grain * 0.06, bubOn];
+    }
+    if (biome === 'badlands') {
       // dry hardpan: broad tonal patches, a mud-crack network, sparse half-buried stones (low contrast: units stay the focus)
       const st = pebbles(u, v, 22, seed + 2, 0.26);
       const fine = pebbles(u, v, 90, seed + 8, 0.2);
@@ -108,8 +135,41 @@ function path(biome: Biome, p: MapPalette, seed: number): TexSet {
   const base = rgb(p.path);
   const { s, glow } = paint((u, v) => {
     const grain = fbm(u, v, 56, seed, 2), mid = fbm(u, v, 6, seed + 1);
-    // TODO(stage10-terrain): frost borrows badlands, marsh falls through to crystal (placeholder looks).
-    if (biome === 'badlands' || biome === 'frost') {
+    if (biome === 'frost') {
+      // ploughed service lane: compacted cold-grey grit, darker wet tracks, rare glassy frozen puddles (~8%)
+      const gr = pebbles(u, v, 64, seed + 2, 0.36);
+      const big = pebbles(u, v, 14, seed + 7, 0.22);
+      const wet = sstep(0.5, 0.68, fbm(u, v, 4, seed + 3));
+      const puddle = sstep(0.69, 0.72, fbm(u, v, 5, seed + 4));
+      let c = mul(base, 0.97 + (mid - 0.5) * 0.2 + (grain - 0.5) * 0.1);
+      if (gr.h > 0) c = mix(c, mul(base, 0.75 + gr.tone * 0.35), sstep(0, 0.4, gr.h) * 0.6 * (1 - puddle));
+      if (big.h > 0) c = mix(c, mul([0.4, 0.41, 0.43], 0.85 + big.tone * 0.35), sstep(0, 0.3, big.h) * (1 - puddle));
+      c = mix(c, rgb(p.decor), wet * 0.25 + puddle * 0.2);
+      return [mid * 0.2 + grain * 0.1 + (gr.h * 0.35 + big.h * 0.7) * (1 - puddle) - wet * 0.1, c, 0.8 - wet * 0.15 - puddle * 0.55, 0];
+    }
+    if (biome === 'marsh') {
+      // causeway: duckboard planks (0.25 units wide, 1-2 units long, rows offset), dark seams, rust stains, mud at the
+      // plank ends; now and then a rusted steel grating panel. ponytail: planks always run along x (on z lanes they cross).
+      const decor = rgb(p.decor);
+      const row = Math.floor(v * 8), fy = v * 8 - row;
+      const pu = u * 2 + hash(row, 1, seed + 2) * 2, col = Math.floor(pu), fx = pu - col;
+      const odd = wrap(col, 2), long = hash(row, 5, seed + 2) < 0.5; // long rows: one 2-unit plank, no mid seam
+      const pid = hash(long ? 0 : odd, row * 3, seed + 3);
+      const dE = long ? Math.min((fx + odd) * 128, (2 - fx - odd) * 128) : Math.min(fx * 128, (1 - fx) * 128);
+      const dS = Math.min(fy, 1 - fy) * 32; // px to plank end / side
+      const seam = 1 - sstep(0.8, 2.2, Math.min(dE, dS));
+      const grate = pid > 0.86 ? 1 : 0;
+      const hatch = grate ? Math.max(1 - sstep(0.5, 1.5, Math.abs(((u * 256) % 8) - 4)), 1 - sstep(0.5, 1.5, Math.abs(((v * 256) % 8) - 4))) : 0;
+      const grainW = fbm(u, v * 8, 24, seed + 4, 2); // wood grain along the plank
+      const rust = sstep(0.45, 0.75, fbm(u, v, 5, seed + 5)) * 0.35;
+      const mud = (1 - sstep(4, 22, dE)) * sstep(0.4, 0.6, fbm(u, v, 9, seed + 6));
+      let c = grate ? mul([0.36, 0.35, 0.33], 0.9 + grain * 0.2) : mul(base, 0.9 + (pid - 0.5) * 0.2 + (grainW - 0.5) * 0.22);
+      c = mix(c, [0.48, 0.29, 0.16], rust * (grate ? 1.6 : 1));
+      c = mix(c, mul(decor, 1.2), mud * 0.6);
+      c = mix(c, decor, Math.max(seam, hatch * 0.85) * 0.75);
+      return [(1 - seam) * (0.75 + grainW * 0.15) - hatch * 0.35 - mud * 0.1, c, 0.7 - grate * 0.15, 0];
+    }
+    if (biome === 'badlands') {
       // packed road dirt + dense gravel, dark worn patches
       const gr = pebbles(u, v, 64, seed + 2, 0.36);
       const big = pebbles(u, v, 14, seed + 7, 0.22);
@@ -148,8 +208,35 @@ function rock(biome: Biome, p: MapPalette, seed: number): TexSet {
   const cliff = rgb(p.cliff);
   const { s, glow } = paint((u, v) => {
     const grain = fbm(u, v, 40, seed, 3), mid = fbm(u, v, 5, seed + 1);
-    // TODO(stage10-terrain): frost borrows badlands, marsh falls through to crystal (placeholder looks).
-    if (biome === 'badlands' || biome === 'frost') {
+    if (biome === 'frost') {
+      // glacial ice cliffs: 12 thick warped bands per 2 units toned cliff -> pale ice, vertical melt streaks
+      const t = v * 12 + (fbm(u, v, 3, seed + 2) - 0.5) * 2;
+      const band = Math.floor(t), f = t - band;
+      const tone = hash(wrap(band, 12), 0, seed + 3);
+      const streak = fbm(u * 4, v, 6, seed + 4, 3) * sstep(0.35, 0.7, fbm(u, v, 3, seed + 5));
+      let c = mix(cliff, rgb('#DCE8F0'), tone * 0.45);
+      c = mul(c, 0.88 + (grain - 0.5) * 0.25 - (1 - f) ** 6 * 0.3 - streak * 0.2);
+      return [(1 - f * f) * (0.4 + tone * 0.4) + grain * 0.3 - streak * 0.25, c, 0.55 + grain * 0.3 - tone * 0.2, 0];
+    }
+    if (biome === 'marsh') {
+      // concrete levee blocks (1 x 0.5 units, rows offset; 4 rows per 2 units, an even count so the bond tiles), chipped
+      // edges, rust and water streaks, a thin accent seep in a few seams
+      const rowT = v * 4, row = Math.floor(rowT), fy = rowT - row;
+      const bu = u * 2 + (row % 2) * 0.5, col = Math.floor(bu), fx = bu - col;
+      const bid = hash(wrap(col, 2) + row * 2, 4, seed + 2);
+      const chip = (fbm(u, v, 16, seed + 3) - 0.5) * 0.06;
+      const d = Math.min(fx, 1 - fx, Math.min(fy, 1 - fy) * 0.5) + chip; // units to the block edge
+      const seam = 1 - sstep(0.006, 0.03, d);
+      const streak = fbm(u * 6, v, 5, seed + 4, 3) * sstep(0.4, 0.7, fbm(u, v, 3, seed + 5));
+      const rust = sstep(0.55, 0.8, fbm(u * 3, v, 4, seed + 6));
+      let c = mul(cliff, 0.95 + bid * 0.25 + (grain - 0.5) * 0.3 + (mid - 0.5) * 0.15);
+      c = mix(c, [0.48, 0.29, 0.16], rust * 0.4);
+      c = mul(c, 1 - streak * 0.3);
+      c = mix(c, mul(cliff, 0.35), seam * 0.85);
+      const seep = seam * sstep(0.62, 0.72, fbm(u, v, 4, seed + 7));
+      return [(1 - seam) * (0.7 + bid * 0.2) + grain * 0.25 - streak * 0.15, c, 0.8 - streak * 0.25, seep];
+    }
+    if (biome === 'badlands') {
       // sandstone strata: 24 bands per 2 units, warped; ledges + vertical erosion streaks
       const t = v * 24 + (fbm(u, v, 3, seed + 2) - 0.5) * 3;
       const band = Math.floor(t), f = t - band;

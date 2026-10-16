@@ -813,3 +813,25 @@ Both new biomes plug into `src/render/hd/terrain/build.ts` `style()` and `src/re
 
 - **No code:** the palette alone does it. Creep veins tint toward the crimson `groundAlt`, crystal props and rock veins turn bone-white (`decor`), and pustules glow `accent` red.
 - **Spawn marker:** if the red pustules compete with the spawn marker (`#ff3a3a`) in the thumbnail, drop `accent` to `#E0405A`. Don't change the spawn colour.
+
+### Errata (terrain pass, as built)
+
+The shipped looks deviate from the specs above in these points. The map files are authoritative.
+
+- **Whiteout Relay palette:**
+  - `ground #6E7A86` and `groundAlt #5F6C78`. The spec hexes rendered near-white (about `#C8D4E2`) under the cool key and sky light. The new values render mid grey-blue, about `#8EA0B4`.
+  - `path #605649`. It is darker and warmer than the spec, so the lane keeps its value contrast against the darker ground.
+  - `accent #9EEBFF`. The pad lights are drawn at 0.7 × accent, and the old value vanished on the grey-blue ground.
+- **Blackwater Sluice palette:** `ground #242C1E` and `groundAlt #3A4426`. The macro tint multiplies by groundAlt/ground in linear light, and the spec pair (×2.2) lifted the peat to olive. The plank causeway must stay the clearly lighter lane.
+- **Ossuary Deep palette:**
+  - `accent #E0405A`, as allowed above. Unoccupied pad lights, and not only the pustules, sat next to the red spawn marker.
+  - `decor #D4C4A8`. This tones down the near-white emissive rock veins on the cliff faces.
+- **frost:**
+  - Ice patches are irregular fbm blobs mixed 32% toward `decor`, not worley cells at 40%. Discs repeating every 2 tiles read as a polka-dot grid.
+  - `look.top` is 1.35, not 1.25, and a new `look.cap` of 0.85 gives boulder tops and ledges the snow cap.
+- **marsh:**
+  - Pools are irregular fbm blobs, for the same repetition reason.
+  - Planks are 0.25 units wide and 1 or 2 units long. Square-ended 1-unit planks read as brickwork.
+  - About 1 plank in 7 is a rusted steel grating panel.
+  - Levee blocks run 4 rows per 2 units (1 × 0.5), not 3. An odd row count breaks the running bond at the texture seam.
+  - The accent seep is on: `glowR` is 0.35 × accent.

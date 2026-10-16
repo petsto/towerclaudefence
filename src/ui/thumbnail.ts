@@ -13,8 +13,7 @@ const PATH_Y = -0.08;
 const PAD_Y = 0.06;
 const SUN = [-6, 14, -5].map((v) => v / Math.hypot(6, 14, 5)) as [number, number, number];
 const SUN_RISE = SUN[1] / Math.hypot(SUN[0], SUN[2]); // shadow-ray climb per unit of ground distance
-/** Small props scattered on raised rock, per biome (crystal spires, ember shards). */
-// TODO(stage10-terrain): frost/marsh specks are the maps.md spec values, unchecked against the final biome art.
+/** Small props scattered on raised rock, per biome (crystal spires, ember shards, ice spires, glow stalks). */
 const SPECK: Readonly<Record<Biome, keyof MapPalette | null>> = { badlands: null, volcanic: 'accent', crystal: 'decor', frost: 'keyLight', marsh: 'accent' };
 
 const isPath = (t: Tile | undefined): boolean => t === 'path' || t === 'spawn' || t === 'core';
@@ -67,7 +66,10 @@ export function drawMapThumbnail(canvas: HTMLCanvasElement, map: MapDef, px = 8)
   }
 
   // --- 1. height + albedo per pixel ---------------------------------------------------------------------------
-  const C = { ground: rgb(p.ground), alt: rgb(p.groundAlt), path: rgb(p.path), pad: rgb(p.buildPad), rock: rgb(p.cliff) };
+  const C = { ground: rgb(p.ground), alt: rgb(p.groundAlt), path: rgb(p.path), pad: rgb(p.buildPad), rock: rgb(p.cliff), decor: rgb(p.decor) };
+  const frost = map.biome === 'frost', marsh = map.biome === 'marsh';
+  // frost: plateau tops wear a snow cap a touch brighter than the ground (look.top / cap in the HD terrain)
+  if (frost) C.rock = [C.ground[0] * 1.04, C.ground[1] * 1.08, C.ground[2] * 1.12];
   const speckKey = SPECK[map.biome];
   const speck = speckKey ? rgb(p[speckKey]) : null;
   const hgt = new Float32Array(W * H);
@@ -84,6 +86,8 @@ export function drawMapThumbnail(canvas: HTMLCanvasElement, map: MapDef, px = 8)
     let k = 1 + grain * 0.1;
     col[0] = C.ground[0]; col[1] = C.ground[1]; col[2] = C.ground[2];
     mix(C.alt, sstep(noise(wx * 0.3, wz * 0.3, seed) * 0.7 + noise(wx * 0.9, wz * 0.9, seed + 1) * 0.3, 0.45, 0.72) * 0.85);
+    if (frost) k *= 1 + (noise(wx * 1.2, wz * 3.6, seed + 9) - 0.5) * 0.12; // sastrugi streaks along x
+    if (marsh) mix(C.decor, sstep(noise(wx * 1.6, wz * 1.6, seed + 9), 0.66, 0.72) * 0.6); // stagnant pools
 
     const dp = regionDist(wx, wz, isPath) + (noise(wx * 7, wz * 7, seed + 6) - 0.5) * 0.06;
     if (dp > -0.06) {
@@ -91,6 +95,7 @@ export function drawMapThumbnail(canvas: HTMLCanvasElement, map: MapDef, px = 8)
       h += (PATH_Y - h) * f;
       mix(C.path, f);
       k = 1 + grain * 0.05 - 0.2 * f * (1 - sstep(dp, 0.04, 0.2)); // grime line inside the curb
+      if (marsh && (wz * 4) % 1 < 0.18) k *= 1 - 0.3 * f; // duckboard plank seams (planks run along x)
     }
     if (tileAt(c, r) === 'build' && Math.abs(wx - c - 0.5) < 0.42 && Math.abs(wz - r - 0.5) < 0.42) {
       h = PAD_Y;

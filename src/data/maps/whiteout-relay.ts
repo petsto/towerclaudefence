@@ -140,12 +140,12 @@ export const whiteoutRelay: MapDef = {
   briefing:
     'The relay on the ice shelf is the last voice this sector has, and a machine column is marching on it through the storm. The road splits around the old antenna field. Cover both lanes or lose the uplink.',
   palette: {
-    ground: '#B4BEC6',
-    groundAlt: '#95A3AE',
-    path: '#6A6862',
+    ground: '#6E7A86',
+    groundAlt: '#5F6C78',
+    path: '#605649',
     buildPad: '#46525E',
     decor: '#2C3842',
-    accent: '#8FD8FF',
+    accent: '#9EEBFF',
     core: '#FFB347',
     cliff: '#5B6D7A',
     keyLight: '#EEF4FF',

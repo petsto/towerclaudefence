@@ -4,6 +4,7 @@
 //   rock: slope-driven on the heightfield (props: everywhere), triplanar (v = world height, so strata stay horizontal);
 //         `look.propGround` swaps the props to a triplanar ground crust (volcanic: basalt columns read as barrels)
 //   plateau tops (y > 0.2): ground texture tinted toward the palette cliff colour × look.top, plus a sunlit rim
+//   snow caps: look.cap blends up-facing rock (prop tops, ledges) to the ground layer
 //   macro tint toward groundAlt: mask G; baked AO: mask B (indirect light + a little cavity); glow region: mask A
 // Lit by the scene's sun + hemisphere light like the sprite bake, with the shared room env at low intensity.
 import * as THREE from 'three';
@@ -12,8 +13,11 @@ import type { TerrainSets } from './textures';
 
 const TEX_SCALE = 0.5; // texture repeats per world unit (one texture over 2 tiles)
 
-/** Per-biome tuning: plateau-top darkness vs the cliff colour, rim highlight strength, props in ground crust. */
-export interface TerrainLook { glowG: string; glowR: string; top: number; rim: number; propGround: boolean }
+/**
+ * Per-biome tuning: plateau-top brightness vs the cliff colour, rim highlight strength, props in ground crust, `cap`:
+ * how much up-facing rock (boulder tops, cliff ledges) takes the ground texture (frost: snow caps; 0 = off).
+ */
+export interface TerrainLook { glowG: string; glowR: string; top: number; rim: number; propGround: boolean; cap: number }
 
 export function terrainMaterial(sets: TerrainSets, mask: THREE.Texture, size: { cols: number; rows: number }, p: MapPalette, look: TerrainLook, envMap: THREE.Texture | null): THREE.MeshStandardMaterial {
   const lin = (hex: string): THREE.Color => new THREE.Color(hex);
@@ -31,6 +35,7 @@ export function terrainMaterial(sets: TerrainSets, mask: THREE.Texture, size: { 
     uTop: { value: ratio(p.cliff, p.ground).multiplyScalar(look.top) },
     uRim: { value: look.rim },
     uPropGround: { value: look.propGround ? 1 : 0 },
+    uCap: { value: look.cap },
     uGlowG: { value: lin(look.glowG).multiplyScalar(2.2) },
     uGlowR: { value: lin(look.glowR).multiplyScalar(1.8) },
   };
@@ -56,7 +61,7 @@ export function terrainMaterial(sets: TerrainSets, mask: THREE.Texture, size: { 
       .replace('#include <common>', /* glsl */ `#include <common>
         varying vec3 vW; varying vec3 vWN; varying float vLift;
         uniform sampler2D tMask, tGA, tGN, tGO, tPA, tPN, tPO, tRA, tRN, tRO;
-        uniform vec2 uMapSize; uniform vec3 uAlt, uTop, uGlowG, uGlowR; uniform float uRim, uPropGround;
+        uniform vec2 uMapSize; uniform vec3 uAlt, uTop, uGlowG, uGlowR; uniform float uRim, uPropGround, uCap;
         vec2 nrmXY(sampler2D t, vec2 uv) { return texture2D(t, uv).xy * 2.0 - 1.0; }`)
       .replace('#include <map_fragment>', /* glsl */ `
         vec3 wn = normalize(vWN);
@@ -79,6 +84,9 @@ export function terrainMaterial(sets: TerrainSets, mask: THREE.Texture, size: { 
           rO = texture2D(tGO, ux) * bw.x + texture2D(tGO, uy) * bw.y + texture2D(tGO, uz) * bw.z;
           rnx = nrmXY(tGN, ux); rny = nrmXY(tGN, uy); rnz = nrmXY(tGN, uz);
         }
+        float capW = uCap * smoothstep(0.45, 0.8, wn.y); // snow caps: up-facing rock takes the ground layer
+        rA = mix(rA, texture2D(tGA, uy).rgb * 1.06, capW);
+        rO = mix(rO, texture2D(tGO, uy), capW);
         vec3 rOff = bw.x * vec3(0.0, rnx.y, rnx.x) + bw.y * vec3(rny.x, 0.0, rny.y) + bw.z * vec3(rnz.x, rnz.y, 0.0);
         float wR = vLift < 0.0 ? steep : 1.0;
         vec3 gA = texture2D(tGA, uvT).rgb * mix(vec3(1.0), uAlt, mk.g * (1.0 - top));

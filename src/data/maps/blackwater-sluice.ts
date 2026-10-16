@@ -149,8 +149,8 @@ export const blackwaterSluice: MapDef = {
   briefing:
     "The refinery's sluice gates are the last dry ground between the hive and the pumping core. Three channels feed the basin, and the brood is coming down all of them.",
   palette: {
-    ground: '#2E3828',
-    groundAlt: '#48512C',
+    ground: '#242C1E',
+    groundAlt: '#3A4426',
     path: '#7A7056',
     buildPad: '#4D5A66',
     decor: '#1A2016',

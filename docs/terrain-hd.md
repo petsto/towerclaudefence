@@ -19,8 +19,30 @@ One sun at `SUN_DIR (-6, 14, -5)`, intensity 3.2, colour `palette.keyLight`, plu
 | Dust Ridge (badlands) | dry hardpan, broad tonal patches, faint warped mud cracks, sparse half-buried stones | lighter packed road dirt + gravel, darker worn curb | sandstone strata (horizontal bands, ledges, erosion streaks) | boulders in strata rock, crashed crates, snapped girders |
 | Cinder Forge (volcanic) | charcoal ash crust in big, flat, faint plates (larger than the path's flagstones, so it never reads as paving); lava glows in the plate cracks only in sparse hot spots away from lanes and pads | basalt flagstones bedded in pale ash | basalt columns, lava seeping at the cliff base | basalt boulders, small ember shards |
 | Hollow Spire (crystal) | dark creep: low swells, ridged wet veins, rare lime pustules | cracked station plates stained with creep (the brightest surface) | faceted violet rock, teal crystal veins | teal crystal spires (≤ 0.8 tall), wreckage |
+| Whiteout Relay (frost) | wind-packed snow crust, mid grey-blue: long sastrugi ridges along x, sparkle grain, faint glassy ice blobs | ploughed lane of warm brown grit and pale gravel, wet tracks, rare glassy frozen puddles (darker than the snow, warm against cool) | glacial ice cliffs: 12 thick bands toned cliff → pale ice, melt streaks; snow-capped plateau tops | snow-capped boulders (`look.cap`), pale ice spires, relay wreckage |
+| Blackwater Sluice (marsh) | black-green wet peat (roughness 0.5): glassy stagnant pools with algae sheen, scum blotches, reed stubble, rare lime bubbles | duckboard causeway: long planks with dark seams, rust, mud at the ends, rusted grating panels (the lightest surface) | concrete levee blocks in running bond, chipped edges, rust and water streaks, a faint lime seep in a few seams | peat-crusted boulders (`propGround`), lime fungal stalks, the densest pipe/pump wreckage |
+| Ossuary Deep (crystal) | crimson creep with red pustules (palette only) | rose station plates | maroon rock, bone veins | bone spires |
 
 All textures are procedural (canvas, tileable 256² over 2 tiles = 128 px/tile, about the bake density at 1440p; albedo + ORM + Sobel normal, ORM red = height for blending, ORM blue = glow mask). They are coloured from the palette, so a new map gets its look from its palette. Transitions blend by layer height (path vs ground) and by slope (rock on cliffs, triplanar so strata stay horizontal).
+
+### Stage 10 biomes (frost, marsh)
+
+Same pipeline, sun, AO and shadows; only `textures.ts` branches, `style()` and palettes are new.
+
+- **Snow caps:** `TerrainLook.cap` blends up-facing rock (boulder tops, ledges) toward the ground layer in `material.ts`. It is 0 everywhere but frost.
+- **Plateau tops:** `look.top` multiplies the linear cliff/ground ratio. The right value depends on the palette pair. With frost's close pair, 1.35 puts the tops just above the ground; in badlands, 1.15 keeps them darker.
+- **Texture repeats:** any distinct feature in a ground texture (ice, pools) repeats every 2 tiles. Keep such features irregular (fbm, not worley discs) and low in contrast, or they read as a dot grid.
+- **Snow must not blow out:** the cool key and sky light render a palette about 1.3× brighter. Frost ground `#6E7A86` lands near `#8EA0B4` on screen.
+- **Bake cost:** the new maps cost the same as the old ones (2560×1440, ppu 120):
+
+  | map | bake (ms) | memory (MB) |
+  |---|---|---|
+  | Whiteout | ~270 | 21.1 |
+  | Blackwater | ~295–320 | 21.1 |
+  | Ossuary | ~250 | 15.7 |
+  | Dust Ridge | ~280 | 21.2 |
+  | Cinder Forge | ~250 | 17.4 |
+  | Hollow Spire | ~245 | 16.0 |
 
 ## Readability rules (non-negotiable)
 
