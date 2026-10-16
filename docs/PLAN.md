@@ -43,14 +43,13 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
     - Draw calls: 10–19 → 6–9.
     - Terrain GPU memory at 1440p: ~4 MB → 16–21 MB (720p ~5 MB, 5K 36–48 MB).
 - Stage 9 ✅ Command Powers (GDD §14): designer contract (be754ad) → parallel sim (b962915), UI (9fa46a4), FX/audio (f4d4951). Tremor Mines (Q, 30 s, 3 stored, 60% slow field) and Lance Strike (E, 150 s, 6 Plasma pulses, 20% of a boss); charging starts at wave 1 launch. Bots use powers; competent bot now wins Dust Ridge Brutal (accepted: easiest map, full kit).
-- Stage 10 🔄 (2026-10-16) UI revamp (StarCraft II style, reference `docs/design/reference/sc2-ui-states.webp`), 3 new maps, custom wave count (1–50, waves 41+ bosses/heavies only), Longshot Railgun range per level + L3 beam. Phases are ordered so no two agents edit the same file at once:
-  - **P0** (parallel). UI art director writes the spec in `docs/design/ui-revamp.md`. Systems designer writes the custom-wave and new-map design (GDD and `docs/design/maps.md`) plus the data/sim contract. Railgun agent works the full vertical slice (`towers.ts`, `fx.ts`, railgun model, sfx) and leaves the GDD to P3.
-  - **P1** (parallel). UI foundation engineer adds tokens and shared components and splits the CSS. Waves engineer implements data, sim, tests and the existing map files.
-  - **P2** (parallel).
-    - Home engineer: home screen, wave-count selector, `main.ts` wiring.
-    - HUD engineer: in-game HUD.
-    - Maps engineer: 3 map files, registration, `data.test.ts`, terrain biomes, `ui/thumbnail.ts`.
-  - **P3**. A QA + docs agent runs the full DoD and balance, browser-checks every map and flow, then refreshes GDD §3/§12/§13, architecture, AGENTS and README.
+- Stage 10 ✅ (2026-10-16) UI revamp (StarCraft II style, reference `docs/design/reference/sc2-ui-states.webp`, spec `docs/design/ui-revamp.md`), 3 new maps, custom wave count (10–50, waves 41+ heavies and bosses only; GDD §15), Longshot Railgun range per level 5.5 / 6.5 / 7.5 + L3 energy beam. Phases as run (no two agents on one file at once):
+  - **P0** (parallel): railgun vertical slice (8562afa); systems designer: custom-wave and new-map design + data/sim contract (5520a40); UI art director: spec + mockup (d466ed4).
+  - **P1** (parallel): UI foundation: tokens, components, Saira, CSS split into `tokens/components/home/hud.css`, `styles.css` deleted (3b08385). Maps engineer, moved up from P2: 3 map files with placeholder frost/marsh looks (fd27fb3). Waves engineer: `buildWaves`, sim, bots, balance block, tests (910cffa), then the renderer bakes every enemy any wave count can spawn (b242e5c).
+  - **P2** (parallel): home engineer: map tiles, difficulty, Campaign/Custom control, `main.ts` wiring (89fd9e6); HUD engineer: top bar with WAVE X / N and boss ticks, compact console, modals (d3d462f); terrain artist (added): frost and marsh biomes, Ossuary palette, matching home previews (0e0715b).
+  - **Balance agent** (added): new maps tuned to the tier ladder (46a124b): Whiteout `g_map` 1.0725, Ossuary 1.095, Blackwater 750 cash + wave edits.
+  - **Audio agent** (added): applied user-supplied ElevenLabs samples (`src/audio/samples/`; documented by QA).
+  - **P3**: docs editor refreshed GDD §3/§5/§9–§13/§15, architecture, AGENTS, README, art-direction §7 pointer; QA agent runs the full DoD, browser-checks every map and flow, removes the legacy CSS aliases.
 
 ## Backlog (deferred until playtest says so)
 - **Sprite atlas memory** (user decides after playtesting; not started). Full roster at 128 px/unit ≈ 100 MB GPU; per-map bake (18 tower levels + that map's enemies only) is lower. Levers, cheapest first:
@@ -59,8 +58,19 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
   3. Fewer frames: enemies 8 yaw → 4 (sim paths are axis-aligned), walk frames 4 → 2 for light enemies.
   4. Bake L2/L3 tower levels lazily on first upgrade instead of at map load.
   5. GPU texture compression (KTX2/Basis) of the baked atlas; largest saving, most work.
+  6. Since Stage 10 `mapEnemies` bakes every enemy any wave count 10–50 can spawn (a few extra cells, e.g. Anvil Tread on Dust Ridge); pass the run's `waveCount` instead if memory matters.
 - **Re-bake after WebGL context loss / devicePixelRatio change** (not done: the load path isn't re-entrant, and units hold the atlas texture). After a context loss the terrain and sprites come back blank; after a DPR change the old bake is only rescaled. Fix: on `webglcontextrestored` / DPR change, rebuild the renderer from `main.ts` (sim state survives).
 - **Terrain load time** (+~250–300 ms; mostly CPU texture generation and mask/AO). Options: a Web Worker or per-biome texture caching.
 - Native-res explosion/death flashes draw as an opaque white disc for a few frames (harsh at 720p); soften in `src/render/fx.ts`.
 - Picket L3 cooldown 0.27 s rounds to 17 ticks (0.283 s); use 0.25 if a tick-exact value matters. Also in Stage 8: Picket upgrades raise rate, Thumper fires 1/2/3 shells (3f5cea2); home previews redrawn in the HD style (2cd0a6d, 2D canvas; a real HD bake cost ~1.6 s).
 - Command Powers follow-ups: optional camera shake on Lance impact (needs the camera rig reachable from `createFx`); strike FX height on raised rock tiles is approximate (0.45); armed power hint stays under the end-game overlay (build mode does the same); AZERTY: Q also pans left (HUD reads `e.key`, camera reads `e.code`); a smaller mid-boss Lance fraction if Dust Ridge Brutal should stay a loss.
+- Stage 10 follow-ups:
+  - **Dust Ridge too easy on custom Elite/Brutal:** N = 50 wins Elite and reaches W50 on Brutal. One global `CUSTOM_GROWTH_TAIL` can't fix it without breaking tier 2–3; needs a per-map growth tail (new `MapDef` field) or a harder Dust roster (GDD §15).
+  - **Blackwater Brutal fragile:** ±50 starting cash swings it from W11 (mid-boss Colossus leaks) to W17 (GDD §13).
+  - **Late-game cash sink on few-pad maps:** once pads are full at L3 (Ossuary ~W24, Hollow ~W29) credits pile up unused (Recruit N = 50 ends with 16–20k unspent); nothing to spend them on.
+  - **Marsh planks always run along x** (terrain textures and `ui/thumbnail.ts`), whatever the path direction.
+  - **Faint 2-tile repeat** on ice and marsh pools at zoom 40.
+  - **CUSTOM chip hidden** when the custom count equals the campaign length (`hud.ts`: treated as Campaign, though the player picked Custom).
+  - **Legacy CSS aliases** (`LEGACY` block in `src/ui/tokens.css`): remove once nothing uses them (QA agent, next).
+  - **`npm run balance` runtime** ~225 s (was ~10 s), most likely the custom N = 50 runs (24 runs of up to 50 waves) plus twice the maps; `npm test` itself is ~4 s. Options: run N = 50 for fewer cells, or parallelise per map.
+  - **No wave-41 "Heavy assault" toast** (GDD §15 asked for one); the HUD tick and home warning cover it.

@@ -155,6 +155,8 @@ Screen shake: only on leak (enemy reaches exit) and boss death, ±2 low-res texe
 
 ## 7. UI style (DOM/CSS)
 
+> **Superseded (Stage 10).** The UI now follows `docs/design/ui-revamp.md`: a StarCraft II-style navy glass console set in Saira, with tokens in `src/ui/tokens.css` and components in `src/ui/components.css`. The SC1 riveted-metal console below (scanlines, CRT green, portrait box, Share Tech Mono / Rajdhani / Orbitron) is kept for history only.
+
 Fonts (Google Fonts, free): **Share Tech Mono** (all numbers/readouts), **Rajdhani** 600/700 (labels, buttons, body), **Orbitron** 700 (game title and screen headers only).
 
 ```css

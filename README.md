@@ -1,6 +1,6 @@
 # Steel Meridian
 
-A browser tower defense with a gritty late-90s RTS feel: an isometric 2.5D battlefield of pre-rendered HD terrain and unit sprites, a metal command console, and armor-versus-damage-type matchups. Hold the colony core against the Chorus swarm and Remnant war machines across three theatres and four difficulties.
+A browser tower defense with a gritty late-90s RTS feel: an isometric 2.5D battlefield of pre-rendered HD terrain and unit sprites, a glass command console, and armor-versus-damage-type matchups. Hold the colony core against the Chorus swarm and Remnant war machines across six theatres and four difficulties.
 
 TypeScript + Three.js + Vite, no UI framework. Original IP.
 
@@ -11,12 +11,21 @@ npm install
 npm run dev    # http://localhost:5173
 npm test
 npm run build
-npm run balance  # headless bot results per map × difficulty
+npm run balance  # headless bot results per map × difficulty (~4 min)
 ```
 
 Node 24+.
 
+## Features
+
+- **Six theatres**, home order by threat tier: Dust Ridge Outpost (badlands, 1), Whiteout Relay (frost, 2), Cinder Forge (volcanic, 2), Blackwater Sluice (marsh, 3), Hollow Spire (crystal, 3), Ossuary Deep (crystal hive, 4).
+- **Four difficulties:** Recruit, Veteran, Elite, Brutal.
+- **Wave count:** Campaign (each map's authored 15–22 waves) or Custom, 10–50 waves. From wave 41 only heavies and bosses come, and every run ends on a boss.
+- **Six structures** with three levels each, damage types against armor classes, and two command powers (Tremor Mines, Lance Strike).
+
 ## Controls
+
+On the home screen, `Tab` / arrow keys move between controls and `Enter` launches. In game:
 
 | Input | Action |
 |---|---|
@@ -39,7 +48,8 @@ Add `?dmg` to the URL to show damage numbers.
 ## Docs
 
 - [AGENTS.md](AGENTS.md): contributor and agent guide (commands, architecture rules, how to add towers, enemies and maps)
-- [docs/GDD.md](docs/GDD.md): game design (towers, enemies, maps, economy)
+- [docs/GDD.md](docs/GDD.md): game design (towers, enemies, maps, economy, custom wave count)
+- [docs/design/ui-revamp.md](docs/design/ui-revamp.md): UI look and components
 - [docs/architecture.md](docs/architecture.md): modules and data flow
 
 ## Dev sandboxes

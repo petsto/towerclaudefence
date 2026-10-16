@@ -4,7 +4,7 @@ Canonical guide for any agent (or human) working in this repo.
 
 ## Purpose
 
-Browser tower defense game with a StarCraft 1 *vibe*: gritty sci-fi, metal console UI, armor/damage-type matchups, isometric 2.5D look. Original IP only. Build plan and orchestration log: `docs/PLAN.md`. Architecture: `docs/architecture.md`. Design docs: `docs/design/`.
+Browser tower defense game with a StarCraft 1 *vibe*: gritty sci-fi, a StarCraft II-style glass console UI (`docs/design/ui-revamp.md`), armor/damage-type matchups, isometric 2.5D look. Original IP only. Build plan and orchestration log: `docs/PLAN.md`. Architecture: `docs/architecture.md`. Design docs: `docs/design/`.
 
 ## Stack
 
@@ -20,7 +20,7 @@ TypeScript (strict) + Vite + Three.js + Vitest. No UI framework: menus and HUD a
 | `npm run test:watch` | Vitest, watch mode |
 | `npm run build` | Typecheck + production build to `dist/` |
 | `npm run preview` | Serve `dist/` |
-| `npm run balance` | Headless bots play every map × difficulty, prints the results table (GDD §13; excluded from `npm test`) |
+| `npm run balance` | Headless bots play every map × difficulty plus custom N = 10/50 runs, prints the results tables (GDD §13, §15; excluded from `npm test`; ~4 min) |
 
 ## Directory map
 
@@ -28,13 +28,14 @@ TypeScript (strict) + Vite + Three.js + Vitest. No UI framework: menus and HUD a
 index.html        #app: canvas container + #ui overlay
 src/main.ts       boot: wires sim, render, ui, and the game loop
 src/sim/          pure deterministic simulation (no three, no DOM)
-src/data/         definitions: towers, enemies, maps, difficulty
+src/data/         definitions: towers, enemies, maps (6), difficulty, powers; waves.ts: buildWaves (custom wave count)
 src/render/       Three.js; reads sim state, draws it at native res (index.ts: renderer, load-time bakes, frame order;
                   units.ts: sprite billboards; fx.ts: event-driven VFX; camera.ts: pan/zoom input; view.ts: camera
                   sizing grid; hd/: HD unit models + sprite atlas bake, contract in hd/index.ts; hd/terrain/: HD map
                   scene pre-rendered once per map, spec docs/terrain-hd.md)
 src/audio/        WebAudio-synthesised SFX driven by sim events
-src/ui/           DOM overlays: home screen, HUD, build/sell panel
+src/ui/           DOM overlays: home screen, HUD; CSS in cascade order tokens.css -> components.css -> home.css -> hud.css
+                  (all imported by ui/index.ts; spec docs/design/ui-revamp.md)
 dev/              standalone sandbox pages (see below), not shipped
 docs/             plan, architecture, design docs
 ```
@@ -69,11 +70,11 @@ Design rules: `docs/GDD.md`. Types: `src/data/types.ts`. Sim contract: `src/sim/
 
 - **Tower:** add the id to `TowerId` in `src/data/types.ts`, a `TowerDef` (3 levels: base + 2 upgrades, full stats per level) to `TOWERS` and `TOWER_LIST` in `src/data/towers.ts`, rows in both GDD §3 tables; add sim tests if it needs new behaviour (new `Delivery` or stat). HD model: `src/render/hd/towers/<id>.ts` (`(level) => Built`, see the contract in `src/render/hd/index.ts`) registered in `HD_TOWERS` (a full `Record`, so typecheck demands it); FX muzzle points come from the model (turret's +X tip; `arc_coil` fires from its crown, see `muzzleOf` in `src/render/fx.ts`); check it in `/dev/models.html?unit=<id>`. Per-tower tables (typecheck flags the `Record`s): `TOWER_ICONS` in `src/ui/icons.ts`, and optionally `SHOT` in `src/audio/sfx.ts` (omit = silent shot) and `DEFAULT_ORDER` in `src/sim/autoplay.ts`. Hardcoded counts (not typechecked): the tower/hotkey count of `6` in `src/data/data.test.ts`, the "[1–6]" hint in `src/ui/hud.ts` and the README controls.
 - **Enemy:** add the id to `EnemyId`, an `EnemyDef` to `ENEMIES` in `src/data/enemies.ts` (new ability = new `EnemyAbility` variant + sim support + test), a row in GDD §4; reference it from wave groups; add an HD model `src/render/hd/enemies/<id>.ts` (`(walkPhase) => Built`) registered in `HD_ENEMIES` (a full `Record`, so typecheck demands it).
-- **Map:** add the id to `MapId`, a file `src/data/maps/<id>.ts` (ASCII `layout` + `parseLayout`, `paths` as `[col,row]` waypoints spawn -> core, `waves` built with `g(...)`, palette, `hpGrowth`, `startingCash`), register it in `MAPS` and `MAP_LIST` in `src/data/maps/index.ts`, add its expected wave count/mid boss to `data.test.ts`, a row in GDD §7–8. It appears on the home screen via `MAP_LIST`. A new `Biome` also needs a `style()` case in `src/render/hd/terrain/build.ts` (decor recipe + `TerrainLook`) and its own `ground`/`path`/`rock` branches in `src/render/hd/terrain/textures.ts` (otherwise it falls through to the crystal look); check it in `/dev/render.html?map=<id>`.
+- **Map:** add the id to `MapId`, a file `src/data/maps/<id>.ts` (ASCII `layout` + `parseLayout`, `paths` as `[col,row]` waypoints spawn -> core, `waves` built with `g(...)`, palette, `tier`, `briefing`, `hpGrowth`, `startingCash`), register it in `MAPS` and `MAP_LIST` (tier order) in `src/data/maps/index.ts`, add its expected wave count/mid boss to `data.test.ts`, rows in GDD §5 and §7–8. Custom runs (GDD §15) generate waves from the map's roster (default: the enemies in `waves`): it needs at least one boss and should hold a heavy, else set `roster` (Dust Ridge adds `anvil_tread`). Set `heavyPaths` if a path is too short for generated heavies and mediums (Ossuary's sally port). Check `npm run balance` for both Campaign and the custom block. It appears on the home screen via `MAP_LIST`. A new `Biome` also needs a `style()` case in `src/render/hd/terrain/build.ts` (decor recipe + `TerrainLook`) and its own `ground`/`path`/`rock` branches in `src/render/hd/terrain/textures.ts` (otherwise it falls through to the crystal look), plus a `SPECK` entry in `src/ui/thumbnail.ts` (typechecked `Record`); check it in `/dev/render.html?map=<id>`.
 
 ## Testing
 
-All sim logic gets Vitest tests next to the code (`*.test.ts`): pathing, targeting, damage/armor, economy, waves, win/lose. Prefer deterministic scenario tests (seed + commands -> expected state). Render/UI are verified in the browser, not unit-tested.
+All sim logic gets Vitest tests next to the code (`*.test.ts`): pathing, targeting, damage/armor, economy, waves, win/lose. Prefer deterministic scenario tests (seed + commands -> expected state). Render/UI are verified in the browser, not unit-tested. Custom wave counts: `src/data/waves.test.ts` (generator) and `src/sim/custom-run.test.ts` (sim; jumps `waveIndex` and clears enemies instead of playing 50 waves). `npm test` runs in seconds; `npm run balance` takes ~4 min (the custom N = 50 block).
 
 ## Definition of done
 

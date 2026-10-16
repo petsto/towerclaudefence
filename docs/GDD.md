@@ -54,7 +54,7 @@ Build only on `B` tiles, one per tile, never blocks the path. Build/upgrade inst
 | Picket | 75: dmg 7, cd 0.33 | 125: dmg 9, cd 0.27, range 4.0 | 300 |
 | Thumper | 110: 2 shells × dmg 16 (0.15 s apart), splash 1.5 | 190: 3 shells, cd 1.50 | 450 |
 | Stasis | 90: slow 45%, 2.5 s, range 3.5 | 150: slow 50%, dmg 8, beam forks to 3 | 360 |
-| Longshot | 130: dmg 70, range 6.0 | 220: dmg 105, cd 2.40, execute 15% | 575 |
+| Longshot | 130: dmg 65, range 6.5 | 220: dmg 105, range 7.5, execute 15% | 575 |
 | Breacher | 150: dmg 50 | 250: 3 missiles, cd 1.80, range 5.0 | 600 |
 | Arc Coil | 120: dmg 20, chain +4 | 200: dmg 26, cd 1.00, shield ×2.0 | 480 |
 
@@ -80,7 +80,7 @@ Spawned children give normal bounty/leak cost and inherit the parent's path prog
 
 | Source | Amount |
 |---|---|
-| Starting cash | Dust Ridge 600 · Cinder Forge 650 · Hollow Spire 700 |
+| Starting cash | Dust Ridge 600 · Whiteout Relay 650 · Cinder Forge 650 · Blackwater Sluice 750 · Hollow Spire 700 · Ossuary Deep 750 |
 | Kill bounty | Per enemy (§4). Flat, does not scale with wave. |
 | Wave-clear bonus | `30 + 6 × w` (w = 1-based wave) when every enemy of that wave incl. children is dead or leaked. Boss waves ×2. |
 | Early-call bonus | `4 × floor(countdown seconds left)`, max 60 |
@@ -115,7 +115,7 @@ Cash results round down. Wave content is identical across difficulties.
 | Blackwater Sluice | Marsh (new) | 3 | 24×16 | 3 inlets, merge at [8,4] then [15,9] (35 / 31 / 34 tiles) | 34 | 20 | 1.080 | ×4.3 | W10 Foundry Colossus | W20 Choir Mother |
 | Ossuary Deep | Crystal (hive-heart palette) | 4 | 20×14 | 2: spiral (71 tiles) + sally port (14), cross at [17,8], share row 8 from [14,8] | 18 | 22 | 1.095 | ×6.7 | W11 Choir Mother | W22 Choir Mother + Foundry Colossus |
 
-Home order (`MAP_LIST`, tier ascending): Dust Ridge, Whiteout Relay, Cinder Forge, Blackwater Sluice, Hollow Spire, Ossuary Deep. Tier pips scale to the highest tier (4). New maps are spec'd in `docs/design/maps.md` §4–§6 (balance errata there). Starting cash: Whiteout Relay 650, Blackwater Sluice 750, Ossuary Deep 750.
+Home order (`MAP_LIST`, tier ascending): Dust Ridge, Whiteout Relay, Cinder Forge, Blackwater Sluice, Hollow Spire, Ossuary Deep. Tier pips scale to the highest tier (4). New maps are spec'd in `docs/design/maps.md` §4–§6 (balance errata there). Starting cash: §5.
 
 Tile legend: `.` ground · `#` path · `B` build · `S` spawn · `C` core · `x` decor. Strategy notes per map: `docs/design/maps.md`.
 
@@ -213,24 +213,23 @@ Authored as explicit groups `{ enemyId, count, interval, delay, pathIndex }` in 
 
 ## 9. Game flow
 
-State machine: `docs/architecture.md`.
+State machine: `docs/architecture.md`. Layout and states: `docs/design/ui-revamp.md` §3–§4.
 
-- **Home:** map cards (thumbnail from map data, name, biome, wave count) and a 4-way difficulty switch.
-- **Playing:** sim runs; before wave 1 the player builds freely and presses CALL WAVE.
-- **Paused:** sim stops; only resume/speed commands accepted. Menu: Resume, Restart, Quit to Home.
-- **Victory/Defeat:** summary (waves cleared, lives left), buttons Retry and Home. Sim is discarded on Home.
+- **Home:** map tiles in `MAP_LIST` order (thumbnail from map data, name, biome, campaign wave count, tier badge and pips), a mission briefing (intel rows, typed briefing text), a 4-way difficulty switch and the **wave count**: Campaign (default, the map's authored length) or Custom (10–50, §15). Map, difficulty, mode and custom count persist in `localStorage`. BEGIN OPERATION (or Enter) starts `{ mapId, difficultyId, waveCount }`, `waveCount` undefined for Campaign.
+- **Playing:** sim runs; before wave 1 the player builds freely and presses CALL WAVE. The top bar shows `WAVE 07 / 50` with a progress bar, a tick at every boss wave (and at wave 41 in runs of 41+), the next-wave countdown or HOLD, credits, lives, speed, pause and mute. A `CUSTOM` chip marks custom runs. Toasts: gold info, red for boss waves (`final assault` only on the last wave, by index), green for wave clears.
+- **Paused:** sim stops; only resume/speed commands accepted. Modal: Resume, Restart mission, Quit to menu.
+- **Victory/Defeat:** modal with theatre, difficulty, "Waves X / N cleared", lives, credits, kills, damage dealt and mission time; buttons Retry mission and Main menu. Retry recreates the sim on the same config (same wave count); Main menu discards it.
 
 ## 10. Controls
 
-Key bindings: `README.md`. Towers use number keys `1`–`6` so WASD stays free for camera panning.
+Key bindings: `README.md`. Towers use number keys `1`–`6` so WASD stays free for camera panning. Home: Tab / arrows move between controls, Enter launches.
 
 ## 11. Art direction (detail: `docs/design/art-direction.md`)
 
-- Orthographic camera, yaw 0°, pitch 55°; low-res render target upscaled at integer scale with nearest filtering; 8-level posterize + Bayer dither.
-- Flat-shaded Lambert, one hard-shadow directional key light, per-biome hemisphere fill, no fog.
-- Primitive-built low-poly models, instanced per type. Player = steel blue / gunmetal / amber; hostiles never blue or amber.
-- Per-map palettes live in `MapDef.palette`: tile colors from `maps.md`, lighting (key, hemi, cliff, void) from `art-direction.md` (Dustbelt → Dust Ridge, Cinder → Cinder Forge, new crystal set → Hollow Spire). Orbital and Frostline biomes are dropped.
-- DOM HUD at native resolution: metal console panels, Share Tech Mono / Rajdhani / Orbitron.
+- Orthographic camera, yaw 0°, pitch 55°. Units are HD PBR models baked to a sprite atlas per map; terrain is an HD scene pre-rendered once per map (`docs/terrain-hd.md`). Everything draws at native resolution.
+- Player = steel blue / gunmetal / amber; hostiles never blue or amber.
+- Per-map palettes live in `MapDef.palette`. Biomes: badlands (Dust Ridge), volcanic (Cinder Forge), crystal (Hollow Spire; Ossuary Deep with a hive-heart palette), frost (Whiteout Relay), marsh (Blackwater Sluice). Each biome has its own terrain look (`src/render/hd/terrain/`).
+- DOM UI (Stage 10): a StarCraft II-style navy glass console with cyan state borders, a gold primary call to action and white tabular numbers, set in Saira. Spec: `docs/design/ui-revamp.md`; tokens and components in `src/ui/tokens.css` / `components.css`.
 
 ## 12. Changelog of decisions
 
@@ -254,10 +253,15 @@ Key bindings: `README.md`. Towers use number keys `1`–`6` so WASD stays free f
 | Picket upgrades raise fire rate as well as damage; Thumper L2/L3 fire 2/3 shells (16 dmg each): extras hit the next-best targets in range, else land 0.4 tiles around the primary | Balance pass |
 | Command powers (§14): Tremor Mines (Q, 30 s, 3 stored, 60% slow field) and Lance Strike (E, 120 s, 6 Plasma pulses, 20% of a boss). Charging starts at wave 1 launch, not map load (no build-phase banking). Lance damage scales with `g_map`, bosses take a fixed fraction instead (mid and final alike). No difficulty modifier. | Product/game design |
 | Lance charge 120 → 150 s: at 120 s the powers flipped Cinder Forge Elite to a comfortable win. Mines 30 → 40 s and a per-difficulty charge multiplier were tried and dropped (no target moved; Dust Brutal needs ×3 and is non-monotonic below) | Balance pass |
+| Longshot range grows per level 5.5 / 6.5 / 7.5 (was 5.5 / 6.0 / 6.0); L2 dmg 70 → 65 and L3 keeps cd 2.50 (was 2.40) to pay for the reach. L3 fires an energy beam (own FX and SFX) | Stage 10 |
+| Custom wave count (§15): Campaign default, Custom 10–50; waves past the authored list are generated by `buildWaves`, heavies and bosses only from wave 41; growth halves past the authored length (`CUSTOM_GROWTH_TAIL` 0.5) | Stage 10, systems design |
+| Three new maps (§7–8): Whiteout Relay (frost, tier 2), Blackwater Sluice (marsh, tier 3), Ossuary Deep (crystal hive-heart palette, tier 4); home order by tier | Stage 10, systems design |
+| New-map balance to the tier ladder: Whiteout `g_map` 1.07 → 1.0725, Ossuary 1.08 → 1.095, Blackwater cash 700 → 750 plus wave edits (Husks at 1.5 s spacing, W8/W11 split) | Balance pass |
+| UI moves from the SC1 riveted-metal console to an SC2-style navy glass look (Saira, state-ladder borders, gold CTA); `docs/design/ui-revamp.md` | Stage 10, UI art director |
 
 ## 13. Balance
 
-Headless bots (`src/sim/autoplay.ts`) play every map × difficulty; `npm run balance` prints the full table (`src/sim/balance.report.test.ts`, excluded from `npm test`; ~10 s). Deterministic: same numbers, same table.
+Headless bots (`src/sim/autoplay.ts`) play every map × difficulty; `npm run balance` prints the full table (`src/sim/balance.report.test.ts`, excluded from `npm test`; ~225 s since the custom N = 50 block). Deterministic: same numbers, same table.
 
 - **naive**: fixed build order on the max-coverage pad, alternates build/upgrade from 6 towers.
 - **competent**: looks 3 waves ahead; per wave group estimates kill ratio *r* = damage the defense deals while the group walks past ÷ group effective HP (armor, size, shields, splash/chain, regen, overkill), expects `stake × e^(−r/2)` lives to leak and buys the build/upgrade that most reduces the sum of squared expected leaks per credit. Mixes towers and prepares for bosses without hard-coded rules. `competentStrategy(['picket'])` etc. gives the mono-tower variants.
@@ -393,18 +397,18 @@ Every run ends on a boss. **Boss clearance:** no boss wave sits in the two waves
 
 ### HP scaling
 
-`hp(w) = baseHp × diffHp × (g_map + g_diff)^e` with `e = hpExponent(i, L)` (i 0-based). That's `i` for authored waves, and `(L−1) + (i − (L−1)) × CUSTOM_GROWTH_TAIL` (0.5) past them. So Campaign and short runs are unchanged, and growth halves its rate after the authored length. Raw `g^49` reaches ×17–43 (a W50 Hollow Choir Mother at 130k HP); the tail keeps W50 at ×6–15.
+`hp(w) = baseHp × diffHp × (g_map + g_diff)^e` with `e = hpExponent(i, L)` (i 0-based). That's `i` for authored waves, and `(L−1) + (i − (L−1)) × CUSTOM_GROWTH_TAIL` (0.5) past them. So Campaign and short runs are unchanged, and growth halves its rate after the authored length. Raw `g^49` reaches ×17–85 (a W50 Hollow Choir Mother at 130k HP); the tail keeps W50 at ×6–24.
 
 | Map (L) | W50 growth (raw) | Choir Mother W50: Recruit / Veteran / Brutal | Lance pulse W50 (full strike) | Anvil Tread W50 HP+sh (Veteran) |
 |---|---|---|---|---|
 | Dust Ridge (15) | ×6.3 (×17.4) | 10.5k / 18.8k / 27.0k | 940 (5.6k) | 6.6k |
-| Whiteout Relay (18) | ×9.3 (×27.5) | 15.4k / 28.0k / 40.5k | 1,399 (8.4k) | 9.8k |
+| Whiteout Relay (18) | ×10.1 (×30.9) | 16.6k / 30.2k / 43.7k | 1,511 (9.1k) | 10.6k |
 | Cinder Forge (18) | ×10.9 (×34.6) | 18.0k / 32.6k / 47.2k | 1,631 (9.8k) | 11.4k |
 | Blackwater Sluice (20) | ×13.7 (×43.4) | 22.5k / 41.1k / 59.8k | 2,054 (12.3k) | 14.4k |
 | Hollow Spire (20) | ×13.7 (×43.4) | 22.5k / 41.1k / 59.8k | 2,054 (12.3k) | 14.4k |
-| Ossuary Deep (22) | ×14.8 (×43.4) | 24.0k / 44.4k / 65.0k | 2,218 (13.3k) | 15.5k |
+| Ossuary Deep (22) | ×24.0 (×85.4) | 39.1k / 71.9k / 105.0k | 3,594 (21.6k) | 25.2k |
 
-Pressure model (wave HP ÷ cash earned before it): the heavy phase holds about 1.4–1.6 on Dust, about 2.3–2.7 on tier-2 maps and about 3.0–4.3 on tier 3–4. That's 1.0–1.7× each map's own Campaign final, rising slowly, with the finale as the spike. `CUSTOM_GROWTH_TAIL` is the one knob the balance pass turns.
+Pressure model (wave HP ÷ cash earned before it): the heavy phase holds about 1.4–1.6 on Dust, about 2.3–2.7 on tier-2 maps and about 3.0–4.3 on tier 3–4. That's 1.0–1.7× each map's own Campaign final, rising slowly, with the finale as the spike. (Modelled before the balance pass raised Whiteout and Ossuary growth; Ossuary now sits above that band.) `CUSTOM_GROWTH_TAIL` is the one knob the balance pass turns.
 
 ### Economy
 
@@ -426,9 +430,9 @@ Pressure model (wave HP ÷ cash earned before it): the heavy phase holds about 1
 
 ### HUD and home (for `docs/design/ui-revamp.md`)
 
-- **Home:** a Campaign | Custom toggle. Custom shows a 10–50 stepper (quick picks 10 / 25 / 40 / 50, default 30), persisted like map and difficulty. Map cards read "15 WAVES" in Campaign and "CUSTOM · 50 WAVES" in Custom. Start passes `{ mapId, difficultyId, waveCount }`, with `waveCount` undefined for Campaign.
-- **HUD:** `WAVE 07 / 50` (`waveIndex + 1` / `waveCount`, two digits) in both modes, plus a small `CUSTOM` tag in custom runs.
-- **Wave 41 flash:** "Heavy assault · armor and bosses only".
+- **Home** (as built, `ui-revamp.md` §3.3): a `Campaign · L` | `Custom` switch. Custom shows a −/+ stepper with a 10–50 range slider (ticks every 10 plus 41, hatched heavy zone from 41); its first value is the map's campaign length, then the last pick. At ≥ 41 a red note and a `!` badge warn "bosses and heavies only". Mode and count persist like map and difficulty. Map tiles always show the campaign length; the briefing's Waves row shows the chosen N. Start passes `{ mapId, difficultyId, waveCount }`, with `waveCount` undefined for Campaign.
+- **HUD:** `WAVE 07 / 50` (`waveIndex + 1` / `waveCount`, two digits) in both modes, a wave bar with boss ticks (plus a wave-41 tick), and a small `CUSTOM` chip in custom runs (hidden when N equals the campaign length).
+- **Wave 41 flash:** not built; the wave-41 tick and the home warning carry it.
 - **Boss flash:** "Final assault" only on the last wave; other `'final'` waves get "massive signature".
 - **Next-wave preview and summary:** both read `buildWaves(MAPS[mapId], waveCount)` (compute once per run), never `map.waves`. The summary shows "Waves 50 / 50 cleared".
 
@@ -439,21 +443,21 @@ Pressure model (wave HP ÷ cash earned before it): the heavy phase holds about 1
 - **Targets:**
   - N = 10, Veteran: wins every map.
   - N = 50, Recruit: reaches the heavy phase (W41+) everywhere and wins tiers 1–2.
-  - N = 50, Veteran: ≥ W30 on every map whose Campaign final the bot clears, wins at most Dust Ridge. Where the Campaign bot already loses at the authored final (Sluice and Hollow on Veteran), the custom run dies there too: wave L of an N ≥ L+3 run *is* that final.
+  - N = 50, Veteran: ≥ W30 on every map whose Campaign final the bot clears, wins at most Dust Ridge. Where the Campaign bot already loses at or before the authored final (Sluice, Hollow and Ossuary on Veteran), the custom run dies there too: waves 1..L of an N ≥ L+3 run *are* the Campaign.
   - N = 50, Elite and Brutal: dies before W45 everywhere.
-- **Results** (2026-10-16, `CUSTOM_GROWTH_TAIL` 0.5; wave reached, W = win):
+- **Results** (2026-10-16 after the new-map balance pass, `CUSTOM_GROWTH_TAIL` 0.5; wave reached, W = win):
 
 | N = 50 | Recruit | Veteran | Elite | Brutal |
 |---|---|---|---|---|
 | Dust Ridge | W | W | W | 50 |
-| Whiteout Relay | W | 50 | 41 | 19 |
+| Whiteout Relay | W | 47 | 31 | 19 |
 | Cinder Forge | W | 50 | 19 | 19 |
-| Blackwater Sluice | 50 | 21 | 20 | 8 |
+| Blackwater Sluice | 50 | 21 | 19 | 15 |
 | Hollow Spire | 46 | 21 | 17 | 17 |
-| Ossuary Deep | 44 | 38 | 21 | 21 |
+| Ossuary Deep | 43 | 20 | 19 | 19 |
 
-  N = 10 Veteran wins every map on 20 lives. Off target: **Dust Ridge Elite wins and Brutal reaches the finale**. That is the §13 known gap (with powers the bot already wins Campaign Dust on Brutal), and Dust's heavy-phase pressure (~1.5) is the lowest by design. Elite and Brutal deaths at W17–21 elsewhere are the Campaign walls, not the generator.
-- **Tail sensitivity** (N = 50, wave reached): `CUSTOM_GROWTH_TAIL` 0.4 makes Dust Brutal a win and Cinder Veteran a win; 0.6 keeps Dust Elite at the finale (loss at 50) but cuts Whiteout Veteran to 43 and Elite to 31, and Recruit Sluice/Hollow to 47/43. One global knob can't pull Dust down without breaking tier 2–3, so it stays 0.5. If Dust Elite should lose, the fix is per-map (a harder Dust roster or a per-map tail, which would need a `MapDef` field), or the §13 Lance-on-mid-boss call.
+  N = 10 Veteran wins every map on 20 lives. Off target: **Dust Ridge Elite wins and Brutal reaches the finale**. That is the §13 known gap (with powers the bot already wins Campaign Dust on Brutal), and Dust's heavy-phase pressure (~1.5) is the lowest by design. Elite and Brutal deaths at W15–21 elsewhere are the Campaign walls, not the generator. Whiteout Elite, which wins its Campaign, reaches W31. Ossuary Veteran now dies where its Campaign run does (W20, before the W22 final), since its growth went 1.08 → 1.095.
+- **Tail sensitivity** (N = 50, wave reached; measured before the new-map balance pass): `CUSTOM_GROWTH_TAIL` 0.4 makes Dust Brutal a win and Cinder Veteran a win; 0.6 keeps Dust Elite at the finale (loss at 50) but cuts Whiteout Veteran to 43 and Elite to 31, and Recruit Sluice/Hollow to 47/43. One global knob can't pull Dust down without breaking tier 2–3, so it stays 0.5. If Dust Elite should lose, the fix is per-map (a harder Dust roster or a per-map tail, which would need a `MapDef` field), or the §13 Lance-on-mid-boss call.
 
 ### Contract
 

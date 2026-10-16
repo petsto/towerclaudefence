@@ -41,11 +41,15 @@ input (mouse/keys, UI buttons)
    -> renderer.render(state, dt), hud.update(state)
 ```
 
+**Wave list.** A run's waves are `buildWaves(MAPS[mapId], waveCount)` (`src/data/waves.ts`), pure and deterministic from map + count. It is never stored on state: `GameState.waveCount` is the run length, and each consumer rebuilds the list once per run. The sim (`createGame`) plays it and scales HP with `hpExponent`; the autoplay bots read it for threat estimates; the HUD reads it for the next-wave preview and the boss ticks on the wave bar; the renderer bakes every enemy that `map.waves` or any count 10–50 can spawn (`mapEnemies` in `src/render/index.ts`), so the bake doesn't depend on the run. `main.ts` only passes `SimConfig.waveCount` from the home screen to `createGame` and keys the final-assault toast on `index === state.waveCount − 1`.
+
+**UI CSS.** `src/ui/index.ts` imports, in cascade order, `tokens.css` (design tokens on `:root`) → `components.css` (global component classes: `.btn`, `.tile`, `.seg`, `.bar`, `.panel`, …) → `home.css` (scoped under `.sm-home`) → `hud.css` (scoped under `.sm-hud`). Font: Saira, linked from `index.html`. Spec: `docs/design/ui-revamp.md` §6.
+
 Canvas mouse input (hover, build placement, tower selection) lives in `src/main.ts`; game hotkeys live in the HUD (`src/ui/hud.ts`); camera pan/zoom (WASD, arrows, edge-pan, wheel) lives in `src/render/camera.ts`.
 
 Rendering (`src/render/index.ts`): everything draws at native resolution straight to the canvas; there is no low-res pass and no posterize. Two bakes run once per map load, both lit by the map's sun + hemi light, so the runtime scene has no lights:
 
-- **Units:** HD PBR models (`src/render/hd/`, one file per tower/enemy, registered in full `Record`s so every id needs a model) are baked into a sprite atlas. Each tower level gets 16 turret yaws plus a base; each enemy gets 8 yaws × 4 walk phases.
+- **Units:** HD PBR models (`src/render/hd/`, one file per tower/enemy, registered in full `Record`s so every id needs a model) are baked into a sprite atlas. Each tower level gets 16 turret yaws plus a base; each enemy gets 8 yaws × 4 walk phases. The enemy set is `mapEnemies(map)`: every enemy any wave count can spawn on that map, children included.
 - **Terrain:** the HD map scene (`src/render/hd/terrain/`: heightfield, mask, procedural texture sets, props; spec `docs/terrain-hd.md`) is pre-rendered from the fixed 55° ortho view into one texture, at the screen's px/unit at zoom 30 (capped at 180). It is drawn as one camera-plane quad.
 
 Frame order:
@@ -61,7 +65,7 @@ The sim never sees real time, only step counts. Same seed + same command log = s
 ## Game state machine
 
 ```
-          select map + difficulty
+          select map + difficulty + wave count
   Home  ---------------------------->  Playing
    ^                                   |    ^
    |                            pause  |    | resume
