@@ -33,7 +33,9 @@ src/render/       Three.js; reads sim state, draws it at native res (index.ts: r
                   units.ts: sprite billboards; fx.ts: event-driven VFX; camera.ts: pan/zoom input; view.ts: camera
                   sizing grid; hd/: HD unit models + sprite atlas bake, contract in hd/index.ts; hd/terrain/: HD map
                   scene pre-rendered once per map, spec docs/terrain-hd.md)
-src/audio/        WebAudio-synthesised SFX driven by sim events
+src/audio/        WebAudio SFX driven by sim events: synthesised by default; recorded samples in samples/ override a sound
+                  (add `samples/<SoundId>.mp3` + one line in `SAMPLES` in sfx.ts; missing/failed samples fall back to the synth);
+                  home-screen music loop with its own gain; mute is persisted in localStorage
 src/ui/           DOM overlays: home screen, HUD; CSS in cascade order tokens.css -> components.css -> home.css -> hud.css
                   (all imported by ui/index.ts; spec docs/design/ui-revamp.md)
 dev/              standalone sandbox pages (see below), not shipped

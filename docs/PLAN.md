@@ -49,7 +49,7 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
   - **P2** (parallel): home engineer: map tiles, difficulty, Campaign/Custom control, `main.ts` wiring (89fd9e6); HUD engineer: top bar with WAVE X / N and boss ticks, compact console, modals (d3d462f); terrain artist (added): frost and marsh biomes, Ossuary palette, matching home previews (0e0715b).
   - **Balance agent** (added): new maps tuned to the tier ladder (46a124b): Whiteout `g_map` 1.0725, Ossuary 1.095, Blackwater 750 cash + wave edits.
   - **Audio agent** (added): applied user-supplied ElevenLabs samples (`src/audio/samples/`; documented by QA).
-  - **P3**: docs editor refreshed GDD §3/§5/§9–§13/§15, architecture, AGENTS, README, art-direction §7 pointer; QA agent runs the full DoD, browser-checks every map and flow, removes the legacy CSS aliases.
+  - **P3**: docs editor refreshed GDD §3/§5/§9–§13/§15, architecture, AGENTS, README, art-direction §7 pointer; QA agent runs the full DoD, browser-checks every map and flow, removed the legacy CSS aliases, added the wave-41 "Heavy assault" toast, browser-passed home (3 sizes), all 6 maps, N=10 and N=50 (wave 41+ heavies/bosses only, all sprites present), railgun L3; no console errors.
 
 ## Backlog (deferred until playtest says so)
 - **Sprite atlas memory** (user decides after playtesting; not started). Full roster at 128 px/unit ≈ 100 MB GPU; per-map bake (18 tower levels + that map's enemies only) is lower. Levers, cheapest first:
@@ -71,6 +71,5 @@ Stages 2–4 run in parallel against the data/type contracts from stage 1.
   - **Marsh planks always run along x** (terrain textures and `ui/thumbnail.ts`), whatever the path direction.
   - **Faint 2-tile repeat** on ice and marsh pools at zoom 40.
   - **CUSTOM chip hidden** when the custom count equals the campaign length (`hud.ts`: treated as Campaign, though the player picked Custom).
-  - **Legacy CSS aliases** (`LEGACY` block in `src/ui/tokens.css`): remove once nothing uses them (QA agent, next).
+  - **Start framing at 1440×900 / DPR 2**: the column-0 spawn on Dust Ridge, Whiteout and Blackwater sits just off-screen, because those maps span 24.8 tiles and the widest zoom shows 24, and `applyFocus` (`src/render/camera.ts`) keeps a 1.5-tile margin toward the core. A design call: drop the margin when the map barely fits.
   - **`npm run balance` runtime** ~225 s (was ~10 s), most likely the custom N = 50 runs (24 runs of up to 50 waves) plus twice the maps; `npm test` itself is ~4 s. Options: run N = 50 for fewer cells, or parallelise per map.
-  - **No wave-41 "Heavy assault" toast** (GDD §15 asked for one); the HUD tick and home warning cover it.

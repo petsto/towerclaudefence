@@ -1,6 +1,6 @@
 // Boot: Home -> Playing -> Home. Wires sim, renderer, FX, audio and HUD, and runs the fixed-step loop.
 import { createSfx } from './audio/sfx';
-import { MAPS, POWERS, TOWERS } from './data';
+import { HEAVY_ONLY_FROM, MAPS, POWERS, TOWERS } from './data';
 import type { PowerId, TowerId } from './data/types';
 import { createRenderer } from './render';
 import { createFx } from './render/fx';
@@ -183,6 +183,8 @@ function play(cfg: SimConfig): void {
           const bonus = ev.earlyBonus > 0 ? ` · early bonus +${ev.earlyBonus}` : '';
           // custom runs flag milestone bosses 'final' too, so "last wave" is the index (GDD §15)
           if (ev.index === game.state.waveCount - 1) hud.flash(`Warning · final assault · massive signature · wave ${n}${bonus}`, 'warn');
+          // GDD §15: from wave 41 a custom run spawns only heavies and bosses (the klaxon already sounds on every wave)
+          else if (n === HEAVY_ONLY_FROM) hud.flash(`Warning · heavy assault · bosses and heavies only · wave ${n}${bonus}`, 'warn');
           else if (ev.boss) hud.flash(`Warning · massive signature · wave ${n}${bonus}`, 'warn');
           else hud.flash(`Wave ${n} incoming${bonus}`);
           break;

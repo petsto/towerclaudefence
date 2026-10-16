@@ -169,11 +169,3 @@
     transition: none !important;
   }
 }
-
-/* LEGACY: old SC1 variable names, so home.css/hud.css resolve until P2 rewrites them. Delete when unused (P3 greps). */
-:root {
-  --metal-900: var(--surface-locked); --metal-800: var(--surface); --metal-700: var(--surface-hi); --metal-600: #0f3871; --metal-400: var(--line);
-  --bevel-hi: rgba(160, 210, 255, 0.14); --bevel-lo: rgba(0, 0, 0, 0.55);
-  --readout: var(--text-body); --readout-dim: var(--text-dim); --teal: var(--cyan); --amber: var(--cost-hi);
-  --text-hi: #fff; --font-mono: var(--font-body); --font-ui: var(--font-body); --font-title: var(--font-display);
-}

@@ -432,7 +432,7 @@ Pressure model (wave HP ÷ cash earned before it): the heavy phase holds about 1
 
 - **Home** (as built, `ui-revamp.md` §3.3): a `Campaign · L` | `Custom` switch. Custom shows a −/+ stepper with a 10–50 range slider (ticks every 10 plus 41, hatched heavy zone from 41); its first value is the map's campaign length, then the last pick. At ≥ 41 a red note and a `!` badge warn "bosses and heavies only". Mode and count persist like map and difficulty. Map tiles always show the campaign length; the briefing's Waves row shows the chosen N. Start passes `{ mapId, difficultyId, waveCount }`, with `waveCount` undefined for Campaign.
 - **HUD:** `WAVE 07 / 50` (`waveIndex + 1` / `waveCount`, two digits) in both modes, a wave bar with boss ticks (plus a wave-41 tick), and a small `CUSTOM` chip in custom runs (hidden when N equals the campaign length).
-- **Wave 41 flash:** not built; the wave-41 tick and the home warning carry it.
+- **Wave 41 flash:** a "Heavy assault" warning toast when wave 41 launches (`src/main.ts`), alongside the wave-41 tick and the home warning.
 - **Boss flash:** "Final assault" only on the last wave; other `'final'` waves get "massive signature".
 - **Next-wave preview and summary:** both read `buildWaves(MAPS[mapId], waveCount)` (compute once per run), never `map.waves`. The summary shows "Waves 50 / 50 cleared".
 
