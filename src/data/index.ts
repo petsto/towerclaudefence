@@ -6,3 +6,4 @@ export * from './enemies';
 export * from './difficulty';
 export * from './maps';
 export * from './powers';
+export * from './waves';

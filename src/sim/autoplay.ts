@@ -1,6 +1,8 @@
 // Headless balance helper: plays a map with a scripted strategy, no render/UI.
-import { CHAIN_FALLOFF, CHAIN_JUMP_RANGE, DIFFICULTIES, ENEMIES, MAPS, MID_BOSS_HP_MULT, POWERS, TOWER_LIST, TOWERS } from '../data';
-import type { DifficultyDef, EnemyDef, EnemyId, MapDef, TowerDef, TowerId, TowerLevel } from '../data/types';
+import {
+  buildWaves, CHAIN_FALLOFF, CHAIN_JUMP_RANGE, DIFFICULTIES, ENEMIES, hpExponent, MAPS, MID_BOSS_HP_MULT, POWERS, TOWER_LIST, TOWERS,
+} from '../data';
+import type { DifficultyDef, EnemyDef, EnemyId, MapDef, TowerDef, TowerId, TowerLevel, WaveDef } from '../data/types';
 import { resolveHit } from './damage';
 import { createGame } from './game';
 import { buildPath } from './path';
@@ -113,12 +115,12 @@ interface Threat {
   readonly stake: number;
 }
 
-function threats(map: MapDef, diff: DifficultyDef, from: number, to: number): Threat[] {
+function threats(map: MapDef, waves: readonly WaveDef[], diff: DifficultyDef, from: number, to: number): Threat[] {
   const out: Threat[] = [];
   const lengths = map.paths.map((p) => buildPath(p).length);
-  for (let w = Math.max(0, from); w <= Math.min(to, map.waves.length - 1); w++) {
-    const wave = map.waves[w]!;
-    const growth = (map.hpGrowth + diff.growthAdd) ** w * diff.hpMult;
+  for (let w = Math.max(0, from); w <= Math.min(to, waves.length - 1); w++) {
+    const wave = waves[w]!;
+    const growth = (map.hpGrowth + diff.growthAdd) ** hpExponent(w, map.waves.length) * diff.hpMult;
     const push = (id: EnemyId, count: number, interval: number, pathIndex: number) => {
       const def = ENEMIES[id];
       const scale = growth * (wave.boss === 'mid' && def.isBoss ? MID_BOSS_HP_MULT : 1);
@@ -179,11 +181,13 @@ export function competentStrategy(only?: readonly TowerId[]): Strategy {
   const allowed = only ? only.map((id) => TOWERS[id]) : TOWER_LIST;
   let cells: Cell[][] | null = null;
   let all: Cell[] | null = null;
+  let waves: readonly WaveDef[] | null = null;
   return (game, map) => {
     cells ??= map.paths.map((p) => pathCells({ ...map, paths: [p] }));
     all ??= pathCells(map);
     const s = game.state;
-    const pool = threats(map, DIFFICULTIES[s.difficultyId], s.waveIndex, s.waveIndex + 3);
+    waves ??= buildWaves(map, s.waveCount);
+    const pool = threats(map, waves, DIFFICULTIES[s.difficultyId], s.waveIndex, s.waveIndex + 3);
     // Kill ratio contribution of one tower (type, level, tile) to each group: damage over the group's
     // exposure (time in range per enemy + stream length) / group effective HP.
     const contrib = (def: TowerDef, L: TowerLevel, col: number, row: number) =>
@@ -265,7 +269,7 @@ export function withPowers(strategy: Strategy): Strategy {
     const boss = alive.find((e) => ENEMIES[e.defId].isBoss);
     let target = boss;
     if (!target) {
-      const full = lance.pulses * lance.pulseDamage * map.hpGrowth ** Math.max(0, s.waveIndex);
+      const full = lance.pulses * lance.pulseDamage * map.hpGrowth ** hpExponent(Math.max(0, s.waveIndex), map.waves.length);
       let most = 0;
       for (const e of alive) {
         const cx = Math.floor(e.x) + 0.5;

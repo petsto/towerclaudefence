@@ -4,8 +4,11 @@ import { DIFFICULTY_LIST, MAP_LIST, TOWER_LIST } from '../data';
 import type { DifficultyId, MapId } from '../data/types';
 import { competentStrategy, greedyStrategy, runAutoplay, type Strategy, withPowers } from './autoplay';
 
-const row = (name: string, mapId: MapId, difficultyId: DifficultyId, strategy: Strategy) => {
-  const r = runAutoplay({ mapId, difficultyId }, strategy);
+// GDD §15: a 50-wave run needs ~3 h of sim time at most.
+const CUSTOM_MAX_STEPS = 60 * 60 * 180;
+
+const row = (name: string, mapId: MapId, difficultyId: DifficultyId, strategy: Strategy, waveCount?: number) => {
+  const r = runAutoplay({ mapId, difficultyId, waveCount }, strategy, waveCount ? CUSTOM_MAX_STEPS : undefined);
   const res = r.result === 'victory' ? 'WIN ' : r.result === 'defeat' ? 'loss' : 'time';
   return `| ${mapId.padEnd(18)} | ${difficultyId.padEnd(6)} | ${name.padEnd(16)} | ${res} | ${String(r.waveReached).padStart(2)} | ${String(r.lives).padStart(2)} | ${String(r.cash).padStart(5)} |`;
 };
@@ -28,5 +31,10 @@ test('balance report', () => {
       for (const t of TOWER_LIST) lines.push(row(`only ${t.id}`, map.id, d, withPowers(competentStrategy([t.id]))));
     }
   }
+  lines.push('', 'Custom runs (competent + powers; GDD §15):', lines[0]!, lines[1]!);
+  for (const map of MAP_LIST) lines.push(row('N=10', map.id, 'normal', withPowers(competentStrategy()), 10));
+  for (const map of MAP_LIST) {
+    for (const d of DIFFICULTY_LIST) lines.push(row('N=50', map.id, d.id, withPowers(competentStrategy()), 50));
+  }
   console.log(lines.join('\n'));
-}, 600_000);
+}, 1_800_000);

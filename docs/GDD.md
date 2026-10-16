@@ -361,9 +361,9 @@ Every run ends on a boss. **Boss clearance:** no boss wave sits in the two waves
 | 2 | Armor | heavy 50%, medium 30%, light 20% |
 | 3 | Siege | heavy 60%, medium 40% |
 
-- **Paths:** group k goes on `allowed[(w + k) % allowed.length]`. `allowed` = `MapDef.heavyPaths` for heavy and boss groups (default: all paths), and all paths otherwise.
-- **Timing** (§8 defaults): interval L 0.4 s (0.3 s at count ≥ 16), M 0.9, H 1.8, boss 0. The first group on each path starts at 0. The next group on the same path starts 3 s after the previous one's last spawn. Round delays to 0.1 s.
-- **Milestone bosses:** w ∈ {20, 30, 40} (w % 10 = 0), if generated and w ≤ N−3. The boss is `bosses[floor(w/2) % bosses.length]` at full strength (`'final'`), spawned first. Its escort is the wave's shape at **0.5 × B(w)**, starting 3 s after the boss on its path.
+- **Paths:** group k goes on `allowed[(w + k) % allowed.length]`. `allowed` = all paths for light groups, and `MapDef.heavyPaths` (default: all paths) for medium, heavy and boss groups. Mediums follow heavies because generated counts grow with the budget: 15–21 Rivets through Ossuary's 14-tile sally port killed every Ossuary run by W26–33 in the balance pass; with lights only there, Recruit reaches W44 and Veteran W38.
+- **Timing** (§8 defaults): interval L 0.4 s (0.3 s at count ≥ 16), M 0.9, H 1.8, boss 0. Groups are timed in list order: the first group on each path starts at 0, the next group on the same path starts 3 s after the previous one's last spawn. Round delays to 0.1 s.
+- **Milestone bosses:** w ∈ {20, 30, 40} (w % 10 = 0), if generated and w ≤ N−3. The boss is `bosses[floor(w/2) % bosses.length]` (roster order) at full strength (`'final'`), listed first as group 0 on `heavyPaths[w % len]`. Its escort is the wave's shape at **0.5 × B(w)** (shape groups keep their own k for id and path), so by the timing rule escort groups on the boss's path start 3 s after it and the others at 0.
 
 ### Heavy phase (waves 41..N−1)
 
@@ -374,8 +374,8 @@ Every run ends on a boss. **Boss clearance:** no boss wave sits in the two waves
 ### Finale (wave N of an extended run)
 
 - **K bosses:** N ≤ 40 → one of each boss in the roster (1–2); 41 ≤ N ≤ 49 → 2; N = 50 → 3.
-- Boss ids are the roster bosses sorted by base speed descending (Choir 0.5 before Colossus 0.45), cycled to K. Boss k spawns at `k × FINALE_BOSS_SPACING` (8 s) on `heavyPaths[k % len]`. Faster in front means the gaps only grow (≥3.6 tiles), so one Lance (radius 1.75) catches at most one boss, except where paths merge. That merge exception is a skill reward.
-- **Escort:** 0.5 × B(N) as two heavy groups (N ≥ 41) or the `N % 4` shape (N ≤ 40), starting 3 s after the last boss.
+- Boss ids are the roster bosses sorted by base speed descending (Choir 0.5 before Colossus 0.45), cycled to K, then sorted by speed again (stable): K = 3 with both bosses is Choir, Choir, Colossus. Plain cycling (Choir, Colossus, Choir) would put a faster boss behind a slower one and close the gap. Boss k spawns at `k × FINALE_BOSS_SPACING` (8 s) on `heavyPaths[k % len]`. Faster in front means the gaps only grow (≥3.6 tiles), so one Lance (radius 1.75) catches at most one boss, except where paths merge. That merge exception is a skill reward.
+- **Escort:** 0.5 × B(N) as two heavy groups (N ≥ 41) or the `N % 4` shape (N ≤ 40). Every escort group starts 3 s after the last boss spawns (later groups on a shared path follow the timing rule).
 - Size check: the W50 finale is about 1.8× wave 49, inside §8's "final ×1.6–2.3 of the wave before".
 
 ### HP scaling
@@ -426,17 +426,30 @@ Pressure model (wave HP ÷ cash earned before it): the heavy phase holds about 1
 - **Targets:**
   - N = 10, Veteran: wins every map.
   - N = 50, Recruit: reaches the heavy phase (W41+) everywhere and wins tiers 1–2.
-  - N = 50, Veteran: ≥ W30 everywhere, wins at most Dust Ridge.
+  - N = 50, Veteran: ≥ W30 on every map whose Campaign final the bot clears, wins at most Dust Ridge. Where the Campaign bot already loses at the authored final (Sluice and Hollow on Veteran), the custom run dies there too: wave L of an N ≥ L+3 run *is* that final.
   - N = 50, Elite and Brutal: dies before W45 everywhere.
+- **Results** (2026-10-16, `CUSTOM_GROWTH_TAIL` 0.5; wave reached, W = win):
+
+| N = 50 | Recruit | Veteran | Elite | Brutal |
+|---|---|---|---|---|
+| Dust Ridge | W | W | W | 50 |
+| Whiteout Relay | W | 50 | 41 | 19 |
+| Cinder Forge | W | 50 | 19 | 19 |
+| Blackwater Sluice | 50 | 21 | 20 | 8 |
+| Hollow Spire | 46 | 21 | 17 | 17 |
+| Ossuary Deep | 44 | 38 | 21 | 21 |
+
+  N = 10 Veteran wins every map on 20 lives. Off target: **Dust Ridge Elite wins and Brutal reaches the finale**. That is the §13 known gap (with powers the bot already wins Campaign Dust on Brutal), and Dust's heavy-phase pressure (~1.5) is the lowest by design. Elite and Brutal deaths at W17–21 elsewhere are the Campaign walls, not the generator.
+- **Tail sensitivity** (N = 50, wave reached): `CUSTOM_GROWTH_TAIL` 0.4 makes Dust Brutal a win and Cinder Veteran a win; 0.6 keeps Dust Elite at the finale (loss at 50) but cuts Whiteout Veteran to 43 and Elite to 31, and Recruit Sluice/Hollow to 47/43. One global knob can't pull Dust down without breaking tier 2–3, so it stays 0.5. If Dust Elite should lose, the fix is per-map (a harder Dust roster or a per-map tail, which would need a `MapDef` field), or the §13 Lance-on-mid-boss call.
 
 ### Contract
 
 | What | Where |
 |---|---|
-| `SimConfig.waveCount?: number` (undefined = Campaign; rounded, clamped) | `src/sim/types.ts` |
+| `SimConfig.waveCount?: number` (undefined = Campaign; rounded and clamped by `clampWaveCount`, NaN throws; never rejected) | `src/sim/types.ts` |
 | `GameState.waveCount` = N; wave list = `buildWaves(MAPS[mapId], waveCount)` (not stored on state) | `src/sim/types.ts` |
 | `CUSTOM_WAVES_MIN` 10, `CUSTOM_WAVES_MAX` 50, `HEAVY_ONLY_FROM` 41, `CUSTOM_GROWTH_TAIL` 0.5, `FINALE_BOSS_SPACING` 8 | `src/data/waves.ts` |
-| `hpExponent(waveIndex, authoredCount)` (done), `buildWaves(map, count?)` (stub: Campaign only) | `src/data/waves.ts` |
+| `hpExponent(waveIndex, authoredCount)`, `clampWaveCount(count)`, `buildWaves(map, count?)`, all re-exported from `src/data` | `src/data/waves.ts` |
 | `MapDef.roster?: EnemyId[]` (default: enemies in `waves`), `MapDef.heavyPaths?: number[]` (default: all) | `src/data/types.ts` |
 
 Other rules stay local constants inside `buildWaves`: milestone every 10, clearance 2, escort share 0.5, the shape table, and finale K.

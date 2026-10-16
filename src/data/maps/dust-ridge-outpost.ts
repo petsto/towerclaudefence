@@ -133,6 +133,8 @@ export const dustRidgeOutpost: MapDef = {
     [[0, 2], [20, 2], [20, 6], [3, 6], [3, 10], [20, 10], [20, 13], [23, 13]],
   ],
   waves: dustRidgeWaves,
+  // Campaign roster in order of first appearance + Anvil Tread, so the custom heavy phase (GDD §15) has two heavies.
+  roster: ['skitterling', 'husk_crawler', 'spindle_drone', 'brood_carrier', 'choir_mother', 'rivet_walker', 'anvil_tread'],
   hpGrowth: 1.06,
   startingCash: 600,
 };

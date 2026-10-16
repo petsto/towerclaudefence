@@ -11,6 +11,8 @@ import {
   MID_BOSS_BOUNTY,
   MID_BOSS_HP_MULT,
   POWERS,
+  buildWaves,
+  hpExponent,
   SELL_REFUND,
   SHELL_SCATTER,
   SPLASH_INNER,
@@ -125,6 +127,9 @@ export function createSim(config: SimConfig) {
   const diff = DIFFICULTIES[config.difficultyId];
   const paths = map.paths.map(buildPath);
   const growth = map.hpGrowth + diff.growthAdd;
+  const waves = buildWaves(map, config.waveCount);
+  /** growth ** this at a 0-based wave: HP/shields and Lance pulse (GDD §15 tail past the authored count). */
+  const exponent = (wave: number) => hpExponent(wave, map.waves.length);
   const scaleCash = (n: number) => Math.floor(n * diff.cashMult);
 
   const s: SimState = {
@@ -136,7 +141,7 @@ export function createSim(config: SimConfig) {
     cash: Math.floor(map.startingCash * diff.startCashMult),
     lives: diff.lives,
     waveIndex: -1,
-    waveCount: map.waves.length,
+    waveCount: waves.length,
     waveActive: false,
     nextWaveIn: null,
     towers: [],
@@ -158,7 +163,7 @@ export function createSim(config: SimConfig) {
   let spawner: { wave: number; ticks: number; spawned: number[] } | null = null;
   /** Seconds the current countdown has been held waiting for its wave to clear. */
   let held = 0;
-  const cleared = map.waves.map(() => false);
+  const cleared = waves.map(() => false);
   const emit = (e: SimEvent) => s.events.push(e);
   const findEnemy = (id: number | null) => (id === null ? undefined : s.enemies.find((e) => e.id === id && !e.dead));
   const level = (t: Tower): TowerLevel => t.def.levels[t.level - 1]!;
@@ -168,7 +173,7 @@ export function createSim(config: SimConfig) {
   function spawnEnemy(defId: EnemyId, pathIndex: number, wave: number, progress = 0, midBoss = false): Enemy {
     const def = ENEMIES[defId];
     const path = paths[pathIndex]!;
-    const scale = diff.hpMult * growth ** wave * (midBoss ? MID_BOSS_HP_MULT : 1);
+    const scale = diff.hpMult * growth ** exponent(wave) * (midBoss ? MID_BOSS_HP_MULT : 1);
     const p = pointAt(path, progress);
     const e: Enemy = {
       id: nextEnemyId++,
@@ -432,16 +437,16 @@ export function createSim(config: SimConfig) {
 
   function launchWave(earlyBonus: number) {
     s.waveIndex++;
-    spawner = { wave: s.waveIndex, ticks: 0, spawned: map.waves[s.waveIndex]!.groups.map(() => 0) };
+    spawner = { wave: s.waveIndex, ticks: 0, spawned: waves[s.waveIndex]!.groups.map(() => 0) };
     s.waveActive = true;
     s.nextWaveIn = null;
     s.cash += earlyBonus;
-    emit({ type: 'waveStart', index: s.waveIndex, earlyBonus, boss: map.waves[s.waveIndex]!.boss });
+    emit({ type: 'waveStart', index: s.waveIndex, earlyBonus, boss: waves[s.waveIndex]!.boss });
   }
 
   function updateSpawner() {
     if (!spawner) return;
-    const wave = map.waves[spawner.wave]!;
+    const wave = waves[spawner.wave]!;
     const t = spawner.ticks * dt + EPS;
     let done = true;
     wave.groups.forEach((g, i) => {
@@ -520,7 +525,7 @@ export function createSim(config: SimConfig) {
     for (let w = 0; w <= s.waveIndex; w++) {
       if (cleared[w] || spawner?.wave === w || alive.has(w)) continue;
       cleared[w] = true;
-      const boss = map.waves[w]!.boss ? BOSS_WAVE_CLEAR_MULT : 1;
+      const boss = waves[w]!.boss ? BOSS_WAVE_CLEAR_MULT : 1;
       const bonus = scaleCash((WAVE_CLEAR_BASE + WAVE_CLEAR_PER_WAVE * (w + 1)) * boss);
       s.cash += bonus;
       emit({ type: 'waveClear', index: w, bonus });
@@ -562,7 +567,7 @@ export function createSim(config: SimConfig) {
 
   function pulse(st: Strike, index: number) {
     emit({ type: 'strikePulse', strikeId: st.id, x: st.x, y: st.y, radius: st.radius, index });
-    const damage = LANCE.pulseDamage * map.hpGrowth ** Math.max(0, s.waveIndex);
+    const damage = LANCE.pulseDamage * map.hpGrowth ** exponent(Math.max(0, s.waveIndex));
     // Snapshot: brood born from a kill this pulse is hit by the next one.
     const victims = s.enemies.filter((e) => !e.dead && dist(e, st.x, st.y) <= st.radius);
     for (const e of victims) {
