@@ -7,8 +7,11 @@ const tileAt = (map: MapDef, col: number, row: number): Tile | undefined => map.
 
 const EXPECTED = {
   'dust-ridge-outpost': { waves: 15, midBoss: 8 },
+  'whiteout-relay': { waves: 18, midBoss: 9 },
   'cinder-forge': { waves: 18, midBoss: 9 },
+  'blackwater-sluice': { waves: 20, midBoss: 10 },
   'hollow-spire': { waves: 20, midBoss: 10 },
+  'ossuary-deep': { waves: 22, midBoss: 11 },
 } as const;
 
 describe.each(MAP_LIST.map((m) => [m.id, m] as const))('map %s', (_id, map) => {

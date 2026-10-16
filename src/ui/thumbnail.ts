@@ -14,7 +14,8 @@ const PAD_Y = 0.06;
 const SUN = [-6, 14, -5].map((v) => v / Math.hypot(6, 14, 5)) as [number, number, number];
 const SUN_RISE = SUN[1] / Math.hypot(SUN[0], SUN[2]); // shadow-ray climb per unit of ground distance
 /** Small props scattered on raised rock, per biome (crystal spires, ember shards). */
-const SPECK: Readonly<Record<Biome, keyof MapPalette | null>> = { badlands: null, volcanic: 'accent', crystal: 'decor' };
+// TODO(stage10-terrain): frost/marsh specks are the maps.md spec values, unchecked against the final biome art.
+const SPECK: Readonly<Record<Biome, keyof MapPalette | null>> = { badlands: null, volcanic: 'accent', crystal: 'decor', frost: 'keyLight', marsh: 'accent' };
 
 const isPath = (t: Tile | undefined): boolean => t === 'path' || t === 'spawn' || t === 'core';
 const isDecor = (t: Tile | undefined): boolean => t === 'decor';

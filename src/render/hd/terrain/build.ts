@@ -48,6 +48,11 @@ function style(biome: Biome, p: MapDef['palette']): Style {
     // crystals are accents, not focus: fewer, shorter, desaturated toward the cliff rock, faint glow
     case 'crystal': return { rocks: 1.1, crystals: 1.4, crystal: p.decor, crystalGlow: 0.1, crystalSize: 0.7, crystalSat: 0.5, wreck: 0.14,
       look: { glowG: p.accent, glowR: `#${new THREE.Color(p.decor).multiplyScalar(0.55).getHexString()}`, top: 1.15, rim: 0.3, propGround: false } };
+    // TODO(stage10-terrain): frost/marsh recipes copied from docs/design/maps.md "Biome specs"; textures are placeholders.
+    case 'frost': return { rocks: 2.0, crystals: 0.9, crystal: '#D8F0FF', crystalGlow: 0, crystalSize: 0.8, crystalSat: 0.3, wreck: 0.16,
+      look: { glowG: '#000000', glowR: '#000000', top: 1.25, rim: 0.35, propGround: false } };
+    case 'marsh': return { rocks: 1.6, crystals: 0.3, crystal: p.accent, crystalGlow: 0.5, crystalSize: 0.5, crystalSat: 0.8, wreck: 0.25,
+      look: { glowG: p.accent, glowR: '#000000', top: 0.9, rim: 0.4, propGround: true } };
   }
 }
 

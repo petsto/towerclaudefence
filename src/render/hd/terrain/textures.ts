@@ -61,7 +61,8 @@ function ground(biome: Biome, p: MapPalette, seed: number): TexSet {
   const dark = rgb(p.decor);
   const { s, glow } = paint((u, v) => {
     const grain = fbm(u, v, 48, seed, 2), mid = fbm(u, v, 8, seed + 1);
-    if (biome === 'badlands') {
+    // TODO(stage10-terrain): frost borrows badlands, marsh falls through to crystal (placeholder looks).
+    if (biome === 'badlands' || biome === 'frost') {
       // dry hardpan: broad tonal patches, a mud-crack network, sparse half-buried stones (low contrast: units stay the focus)
       const st = pebbles(u, v, 22, seed + 2, 0.26);
       const fine = pebbles(u, v, 90, seed + 8, 0.2);
@@ -107,7 +108,8 @@ function path(biome: Biome, p: MapPalette, seed: number): TexSet {
   const base = rgb(p.path);
   const { s, glow } = paint((u, v) => {
     const grain = fbm(u, v, 56, seed, 2), mid = fbm(u, v, 6, seed + 1);
-    if (biome === 'badlands') {
+    // TODO(stage10-terrain): frost borrows badlands, marsh falls through to crystal (placeholder looks).
+    if (biome === 'badlands' || biome === 'frost') {
       // packed road dirt + dense gravel, dark worn patches
       const gr = pebbles(u, v, 64, seed + 2, 0.36);
       const big = pebbles(u, v, 14, seed + 7, 0.22);
@@ -146,7 +148,8 @@ function rock(biome: Biome, p: MapPalette, seed: number): TexSet {
   const cliff = rgb(p.cliff);
   const { s, glow } = paint((u, v) => {
     const grain = fbm(u, v, 40, seed, 3), mid = fbm(u, v, 5, seed + 1);
-    if (biome === 'badlands') {
+    // TODO(stage10-terrain): frost borrows badlands, marsh falls through to crystal (placeholder looks).
+    if (biome === 'badlands' || biome === 'frost') {
       // sandstone strata: 24 bands per 2 units, warped; ledges + vertical erosion streaks
       const t = v * 24 + (fbm(u, v, 3, seed + 2) - 0.5) * 3;
       const band = Math.floor(t), f = t - band;

@@ -16,8 +16,13 @@ export type EnemyId =
   | 'mender_unit'
   | 'anvil_tread'
   | 'foundry_colossus';
-// Next: 'whiteout-relay' | 'blackwater-sluice' | 'ossuary-deep' (docs/design/maps.md §4–§6), added with their map files.
-export type MapId = 'dust-ridge-outpost' | 'cinder-forge' | 'hollow-spire';
+export type MapId =
+  | 'dust-ridge-outpost'
+  | 'whiteout-relay'
+  | 'cinder-forge'
+  | 'blackwater-sluice'
+  | 'hollow-spire'
+  | 'ossuary-deep';
 export type DifficultyId = 'easy' | 'normal' | 'hard' | 'brutal';
 
 /**
@@ -139,9 +144,8 @@ export interface WaveDef {
   readonly groups: readonly WaveGroup[];
 }
 
-// 'frost' and 'marsh' are specified in docs/design/maps.md (§4–§5); add them together with their render/ui cases
-// (build.ts style(), textures.ts branches, thumbnail.ts SPECK), which are exhaustive over this union.
-export type Biome = 'badlands' | 'volcanic' | 'crystal';
+// A new biome also needs build.ts style(), textures.ts ground/path/rock branches and thumbnail.ts SPECK (AGENTS.md).
+export type Biome = 'badlands' | 'volcanic' | 'crystal' | 'frost' | 'marsh';
 
 /** Tile colors from maps.md, lighting from art-direction.md. Hex strings. */
 export interface MapPalette {
