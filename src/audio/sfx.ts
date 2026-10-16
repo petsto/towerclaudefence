@@ -1,6 +1,6 @@
-// WebAudio-synthesised SFX. No asset files. One lazily created AudioContext, resumed on the first
-// user gesture; events arriving before that are dropped. Throttled per sound + global voice cap,
-// then a compressor so a 40-enemy wave doesn't clip.
+// WebAudio SFX, synthesised except for the few sounds in SAMPLES, plus the home-screen music. One lazily created
+// AudioContext, resumed on the first user gesture; events arriving before that are dropped. Throttled per sound +
+// global voice cap, then a compressor so a 40-enemy wave doesn't clip.
 import { ENEMIES, POWERS } from '../data';
 import type { TowerId } from '../data/types';
 import type { SimEvent } from '../sim/types';
@@ -8,6 +8,8 @@ import type { SimEvent } from '../sim/types';
 export interface Sfx {
   play(events: readonly SimEvent[]): void;
   setMuted(m: boolean): void;
+  /** Home-screen music on/off, with fades; starts on the first gesture if autoplay is blocked. */
+  setMusic(on: boolean): void;
   readonly muted: boolean;
 }
 
@@ -18,6 +20,21 @@ type SoundId =
   | 'ready' | 'minePlant' | 'mineTrigger' | 'telegraph' | 'lanceBoom' | 'lanceHum';
 
 const MASTER = 0.4;
+/** Samples skip the crush shaper (it would shred them), so they sit at their own level on the master. */
+const SAMPLE_GAIN = 0.6; // rail sample ~ matches the synth rail (loudest 93 ms window -18 vs -17 dBFS)
+/** Music peak on the master, under the SFX; mute covers it via the shared master. */
+const MUSIC = 0.4;
+const MUSIC_FADE = 0.8;
+/** Loop crossfade: the track is cut mid-phrase at full level, so its end doesn't run into its start. */
+const XF = 2;
+
+type SampleId = SoundId | 'music';
+// ElevenLabs MP3s in ./samples, named after the SoundId they replace (music: music-<screen>.mp3). One line per file;
+// until a file decodes (or if it fails) the synth recipe plays instead.
+const SAMPLES: Readonly<Partial<Record<SampleId, string>>> = {
+  rail: new URL('./samples/rail.mp3', import.meta.url).href,
+  music: new URL('./samples/music-home.mp3', import.meta.url).href,
+};
 const MAX_VOICES = 18;
 /** Min seconds between two plays of the same sound. */
 const COOLDOWN: Readonly<Record<SoundId, number>> = {
@@ -109,14 +126,9 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
     noise(ac, nb, t + 0.02, 0.45, env(ac, out, t + 0.02, 0.12, 0.01, 0.42), 'bandpass', 5000, 1500, 3);
     return 0.48;
   },
-  // Longshot L3: the rail crack plus a sub punch, a bright descending zap and a long ionised sizzle
   railHeavy: (ac, out, t, nb) => {
     VOICES.rail(ac, out, t, nb);
-    osc(ac, 'sine', 55, 24, t, 0.55, env(ac, out, t, 0.9, 0.003, 0.55));
-    osc(ac, 'square', jit(4200, 0.04), 140, t, 0.22, lowpass(ac, env(ac, out, t, 0.14, 0.001, 0.22), t, 6000, 900, 0.22));
-    noise(ac, nb, t, 0.06, env(ac, out, t, 0.6, 0.001, 0.06), 'bandpass', 1800, 600, 1.5);
-    noise(ac, nb, t + 0.05, 0.85, env(ac, out, t + 0.05, 0.1, 0.03, 0.8), 'bandpass', 7000, 2500, 5);
-    return 0.9;
+    return railPunch(ac, out, t, nb);
   },
   missile: (ac, out, t, nb) => {
     noise(ac, nb, t, 0.45, env(ac, out, t, 0.45, 0.06, 0.38), 'bandpass', 350, jit(2600, 0.15), 2);
@@ -260,6 +272,15 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
   },
 };
 
+/** Longshot L3 layer over the rail crack (synth or sample): a sub punch, a bright descending zap and a long ionised sizzle. */
+function railPunch(ac: AudioContext, out: AudioNode, t: number, nb: AudioBuffer): number {
+  osc(ac, 'sine', 55, 24, t, 0.55, env(ac, out, t, 0.9, 0.003, 0.55));
+  osc(ac, 'square', jit(4200, 0.04), 140, t, 0.22, lowpass(ac, env(ac, out, t, 0.14, 0.001, 0.22), t, 6000, 900, 0.22));
+  noise(ac, nb, t, 0.06, env(ac, out, t, 0.6, 0.001, 0.06), 'bandpass', 1800, 600, 1.5);
+  noise(ac, nb, t + 0.05, 0.85, env(ac, out, t + 0.05, 0.1, 0.03, 0.8), 'bandpass', 7000, 2500, 5);
+  return 0.9;
+}
+
 function squelch(ac: AudioContext, out: AudioNode, t: number, nb: AudioBuffer, size: number): number {
   const d = 0.25 * size;
   noise(ac, nb, t, d, env(ac, out, t, 0.5, 0.004, d), 'lowpass', jit(1400 / Math.sqrt(size)), 120, 6);
@@ -310,6 +331,19 @@ function soundFor(ev: SimEvent): SoundId | null {
   }
 }
 
+/** First/last frame above -50 dBFS, in seconds: skips leading silence and MP3 encoder padding. */
+function bounds(b: AudioBuffer): { start: number; end: number } {
+  const d = b.getChannelData(0); // ponytail: channel 0 only; fine for the stereo-ish ElevenLabs renders
+  let i = 0;
+  let j = d.length - 1;
+  while (i < j && Math.abs(d[i]!) < 0.003) i++;
+  while (j > i && Math.abs(d[j]!) < 0.003) j--;
+  return { start: i / b.sampleRate, end: (j + 1) / b.sampleRate };
+}
+/** Equal-power crossfade curves. */
+const FADE_IN = Float32Array.from({ length: 64 }, (_, i) => Math.sin((i / 63) * Math.PI * 0.5));
+const FADE_OUT = FADE_IN.slice().reverse();
+
 /** Soft-clip curve with amplitude quantisation: the "gritty retro" bus. */
 function crushCurve(): Float32Array<ArrayBuffer> {
   const n = 1024;
@@ -327,6 +361,10 @@ export function createSfx(): Sfx {
   let bus: AudioNode | null = null;
   let noiseBuf: AudioBuffer | null = null;
   let muted = false;
+  const samples = new Map<SampleId, { buf: AudioBuffer; start: number; end: number }>();
+  let wantMusic = false;
+  type Music = { gain: GainNode; srcs: AudioBufferSourceNode[]; timer: number };
+  let music: Music | null = null;
   const last = new Map<SoundId, number>();
   const level3 = new Set<number>(); // tower ids at L3, from upgrade/build/sell events (shot events carry no level)
   const ends: number[] = [];
@@ -346,6 +384,17 @@ export function createSfx(): Sfx {
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const ctx = ac;
+      for (const [id, url] of Object.entries(SAMPLES) as [SampleId, string][]) {
+        fetch(url)
+          .then((r) => r.arrayBuffer())
+          .then((b) => ctx.decodeAudioData(b))
+          .then((buf) => {
+            samples.set(id, { buf, ...bounds(buf) });
+            if (id === 'music') syncMusic();
+          })
+          .catch((e: unknown) => console.warn(`sfx: sample '${id}' unavailable, using the synth`, e));
+      }
     }
     if (ac.state === 'suspended') void ac.resume();
   }
@@ -359,7 +408,67 @@ export function createSfx(): Sfx {
     for (let i = ends.length - 1; i >= 0; i--) if (ends[i]! <= now) ends.splice(i, 1);
     if (ends.length >= MAX_VOICES && !PRIORITY.has(id)) return;
     last.set(id, now);
-    ends.push(now + VOICES[id](ac, bus, now + 0.005, noiseBuf));
+    const t = now + 0.005;
+    ends.push(now + (sampled(id, t) ?? VOICES[id](ac, bus, t, noiseBuf)));
+  }
+
+  /** Sample-backed voices; null = no sample loaded, use the synth. */
+  function sampled(id: SoundId, t: number): number | null {
+    if (id !== 'railHeavy') return playSample(id, t, jit(1, 0.04));
+    // Longshot L3: the rail sample a touch lower and heavier, plus the synth punch on the crush bus
+    const d = playSample('rail', t, jit(0.9, 0.03));
+    return d === null ? null : Math.max(d, railPunch(ac!, bus!, t, noiseBuf!));
+  }
+  function playSample(id: SampleId, t: number, rate: number): number | null {
+    const s = samples.get(id);
+    if (!s || !ac || !master) return null;
+    const src = ac.createBufferSource();
+    src.buffer = s.buf;
+    src.playbackRate.value = rate;
+    const g = ac.createGain();
+    g.gain.value = SAMPLE_GAIN;
+    src.connect(g).connect(master);
+    src.start(t, s.start);
+    return (s.buf.duration - s.start) / rate;
+  }
+
+  /** Starts or fades out the music to match `wantMusic`; one session at a time, each with its own fade gain. */
+  function syncMusic(): void {
+    const s = samples.get('music');
+    if (!ac || !master) return;
+    const ctx = ac;
+    if (wantMusic && !music && s) {
+      const gain = ctx.createGain();
+      gain.connect(master);
+      const t0 = ctx.currentTime + 0.05;
+      gain.gain.setValueAtTime(0, t0);
+      gain.gain.linearRampToValueAtTime(MUSIC, t0 + MUSIC_FADE);
+      const m: Music = { gain, srcs: [], timer: 0 };
+      const len = s.end - s.start;
+      // each pass fades out over its last XF seconds while the next fades in; scheduled a few seconds ahead
+      const pass = (at: number): void => {
+        const src = ctx.createBufferSource();
+        src.buffer = s.buf;
+        const g = ctx.createGain();
+        if (at > t0) g.gain.setValueCurveAtTime(FADE_IN, at, XF);
+        g.gain.setValueCurveAtTime(FADE_OUT, at + len - XF, XF);
+        src.connect(g).connect(gain);
+        src.start(at, s.start, len);
+        m.srcs = [...m.srcs.slice(-1), src];
+        m.timer = window.setTimeout(() => pass(at + len - XF), (at + len - XF - 3 - ctx.currentTime) * 1000);
+      };
+      pass(t0);
+      music = m;
+    } else if (!wantMusic && music) {
+      const t = ctx.currentTime;
+      const g = music.gain.gain;
+      g.cancelScheduledValues(t);
+      g.setValueAtTime(g.value, t);
+      g.linearRampToValueAtTime(0, t + MUSIC_FADE);
+      clearTimeout(music.timer);
+      for (const src of music.srcs) src.stop(t + MUSIC_FADE);
+      music = null;
+    }
   }
 
   return {
@@ -374,6 +483,11 @@ export function createSfx(): Sfx {
     setMuted(m) {
       muted = m;
       if (master && ac) master.gain.setTargetAtTime(m ? 0 : MASTER, ac.currentTime, 0.02);
+    },
+    setMusic(on) {
+      wantMusic = on;
+      if (on) unlock(); // try autoplay now; the gesture listeners resume it otherwise
+      syncMusic();
     },
     get muted() {
       return muted;

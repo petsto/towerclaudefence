@@ -11,17 +11,39 @@ const container = document.getElementById('canvas-container')!;
 const ui = document.getElementById('ui')!;
 // App lifetime: its gesture-unlock listeners and mute state outlive individual games.
 const sfx = createSfx();
+const LS_MUTED = 'steel-meridian.muted';
+try {
+  sfx.setMuted(localStorage.getItem(LS_MUTED) === '1');
+} catch {
+  // storage blocked: start unmuted
+}
+/** Shared by the home and HUD mute controls; returns the new muted state. */
+function toggleMute(): boolean {
+  sfx.setMuted(!sfx.muted);
+  try {
+    localStorage.setItem(LS_MUTED, sfx.muted ? '1' : '0');
+  } catch {
+    // not remembered
+  }
+  return sfx.muted;
+}
 /** Damage-number floats are noisy; opt in with ?dmg in the URL. */
 const DAMAGE_FLOATS = new URLSearchParams(location.search).has('dmg');
 
 function home(): void {
-  const screen = createHomeScreen(ui, (cfg) => {
-    screen.destroy();
-    play(cfg);
-  });
+  sfx.setMusic(true);
+  const screen = createHomeScreen(
+    ui,
+    (cfg) => {
+      screen.destroy();
+      play(cfg);
+    },
+    { muted: sfx.muted, onToggleMute: toggleMute },
+  );
 }
 
 function play(cfg: SimConfig): void {
+  sfx.setMusic(false);
   const game = createGame(cfg); // cfg.waveCount: undefined = Campaign; restart reuses cfg, so the run length sticks
   const renderer = createRenderer(container, MAPS[cfg.mapId]);
   const fx = createFx(renderer.scene, renderer.interp, MAPS[cfg.mapId]);
@@ -45,10 +67,7 @@ function play(cfg: SimConfig): void {
       stop();
       play(cfg);
     },
-    onToggleMute: () => {
-      sfx.setMuted(!sfx.muted);
-      return sfx.muted;
-    },
+    onToggleMute: toggleMute,
     muted: sfx.muted,
   });
 

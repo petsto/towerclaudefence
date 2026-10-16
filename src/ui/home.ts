@@ -4,6 +4,7 @@ import type { DifficultyDef, DifficultyId, MapDef, MapId } from '../data/types';
 import { CUSTOM_WAVES_MAX, CUSTOM_WAVES_MIN, HEAVY_ONLY_FROM, clampWaveCount } from '../data/waves';
 import type { SimConfig } from '../sim/types';
 import { badge, cap, fmtInt, h, prefersReducedMotion, rankTone } from './dom';
+import { ICON_MUTED, ICON_SOUND } from './icons';
 import { drawMapThumbnail } from './thumbnail';
 
 const GAME_TITLE = 'STEEL MERIDIAN';
@@ -66,7 +67,14 @@ function seg<T extends string>(name: string, label: string, opts: readonly [T, s
   return { group, inputs };
 }
 
-export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) => void): { destroy(): void } {
+/** Same contract as the HUD's mute control; omit for no mute button (dev sandboxes). */
+export interface HomeAudio {
+  muted: boolean;
+  /** Returns the new muted state. */
+  onToggleMute(): boolean;
+}
+
+export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) => void, audio?: HomeAudio): { destroy(): void } {
   const savedMap = load(LS_MAP);
   const savedDiff = load(LS_DIFF);
   const savedWaves = Number(load(LS_WAVES));
@@ -214,6 +222,18 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
       ' launch',
     ),
   );
+  if (audio) {
+    const muteB = h('button', 'btn btn-secondary btn-icon home-mute', { type: 'button' });
+    const renderMute = (m: boolean): void => {
+      muteB.innerHTML = m ? ICON_MUTED : ICON_SOUND;
+      muteB.title = m ? 'Unmute' : 'Mute';
+      muteB.setAttribute('aria-label', muteB.title);
+      muteB.setAttribute('aria-pressed', String(m));
+    };
+    muteB.addEventListener('click', () => renderMute(audio.onToggleMute()));
+    renderMute(audio.muted);
+    screen.append(muteB);
+  }
   root.append(screen);
 
   function onKey(e: KeyboardEvent): void {

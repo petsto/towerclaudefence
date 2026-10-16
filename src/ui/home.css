@@ -42,6 +42,9 @@
   filter: blur(1px);
 }
 
+/* ---------- mute (top-right corner) ---------- */
+.sm-home > .home-mute { position: absolute; top: 12px; right: 12px; z-index: 1; }
+
 /* ---------- title ---------- */
 .sm-home .home-title {
   text-align: center;
