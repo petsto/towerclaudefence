@@ -1,6 +1,6 @@
 // Longshot Railgun: braced four-leg gantry on the plinth, platform on top carrying a long twin mag-rail gun with an
 // amber charge channel, rear power pack and side scope. Per level the gantry rises, the rails lengthen, and parts add
-// up: L2 armour skirts, side capacitors, rangefinder; L3 radiator wings, muzzle accelerator rings, beacon mast, full skirts.
+// up: L2 armour skirts, side capacitors, rangefinder; L3 radiator wings, cyan-lit muzzle accelerator rings, beacon mast, full skirts.
 import { C, DECK, PI, cyl, finalize, kit, plinth, rbox, sph, torus, tube, type Built, type Level, type V3 } from '../kit';
 
 const X: V3 = [0, 0, -PI / 2]; // cylinder +Y -> +X
@@ -98,10 +98,11 @@ export function longshot(level: Level): Built {
   k.add(rbox(0.012, 0.03, 0.06, 0.003), 'metal', C.bore, { p: [x1 + 0.026, y, 0] });
   k.glow(rbox(0.004, 0.012, 0.04, 0.002), C.pip, { p: [x1 + 0.033, y + 0.004, 0] }, 6);
   if (level === 3) for (let i = 0; i < 3; i++) {
-    // muzzle accelerator rings: lit square frames over the front of the rails
+    // muzzle accelerator rings: square frames over the front of the rails, lit cyan like the L3 beam's sheath
     const ax = x1 - 0.06 - i * 0.05;
     k.add(rbox(0.022, 0.09, 0.13, 0.006), 'metal', C.gun, { p: [ax, y + 0.005, 0] });
-    k.glow(rbox(0.024, 0.008, 0.1, 0.002), C.amber, { p: [ax, y + 0.052, 0] }, 5);
+    k.glow(rbox(0.024, 0.008, 0.1, 0.002), C.cyan, { p: [ax, y + 0.052, 0] }, 5);
+    for (const s of [-1, 1]) k.glow(rbox(0.024, 0.07, 0.006, 0.002), C.cyan, { p: [ax, y + 0.005, s * 0.066] }, 4);
   }
   // scope on a left rail mount (L2+ adds a rangefinder pod)
   k.add(rbox(0.04, 0.04, 0.03, 0.006), 'metal', C.gunD, { p: [0.0, 0.19, -0.075] });

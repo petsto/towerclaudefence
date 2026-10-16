@@ -1,6 +1,7 @@
 // Dust Ridge path 0 runs along row 2 (y = 2.5): progress p sits at x = 0.5 + p.
 // Row 0 is build tiles, so a tower at (c, 0) is hypot(p - c, 2) from an enemy at progress p.
 import { expect, test } from 'vitest';
+import { TOWERS } from '../data';
 import type { EnemyId, TowerId } from '../data/types';
 import type { SimEvent } from './types';
 import { run, runUntil, setup } from './test-utils';
@@ -111,6 +112,21 @@ const upgradeTo = (sim: ReturnType<typeof scene>, level: number) => {
   sim.game.drainEvents();
 };
 const shots = (events: SimEvent[]) => events.flatMap((e) => (e.type === 'shot' ? [e.targetId] : []));
+
+test('railgun range grows noticeably with every upgrade', () => {
+  const r = TOWERS.longshot.levels.map((l) => l.range);
+  for (let i = 1; i < r.length; i++) expect(r[i]! - r[i - 1]!).toBeGreaterThanOrEqual(0.75);
+});
+
+test.each([1, 2, 3])('railgun L%d targets out to exactly its data range', (level) => {
+  const range = TOWERS.longshot.levels[level - 1]!.range;
+  for (const [d, fires] of [[range - 0.05, true], [range + 0.05, false]] as const) {
+    const sim = scene('longshot', [['brood_carrier', 5 + Math.sqrt(d * d - 4)]]);
+    upgradeTo(sim, level);
+    sim.game.step();
+    expect(shots(sim.game.drainEvents())).toHaveLength(fires ? 1 : 0);
+  }
+});
 
 test.each([1, 2, 3])('thumper L%d fires that many shells per volley, staggered', (level) => {
   const sim = scene('thumper', [['skitterling', 7], ['skitterling', 6], ['skitterling', 4], ['skitterling', 3]]);

@@ -12,7 +12,7 @@ export interface Sfx {
 }
 
 type SoundId =
-  | 'gun' | 'mortar' | 'rail' | 'missile' | 'zap' | 'stasis' | 'explosion' | 'shieldHit' | 'shieldBreak'
+  | 'gun' | 'mortar' | 'rail' | 'railHeavy' | 'missile' | 'zap' | 'stasis' | 'explosion' | 'shieldHit' | 'shieldBreak'
   | 'squelch' | 'squelchBig' | 'clank' | 'clankBig' | 'leak' | 'klaxon' | 'chime' | 'victory' | 'defeat'
   | 'build' | 'upgrade' | 'sell' | 'siren'
   | 'ready' | 'minePlant' | 'mineTrigger' | 'telegraph' | 'lanceBoom' | 'lanceHum';
@@ -21,7 +21,7 @@ const MASTER = 0.4;
 const MAX_VOICES = 18;
 /** Min seconds between two plays of the same sound. */
 const COOLDOWN: Readonly<Record<SoundId, number>> = {
-  gun: 0.045, mortar: 0.12, rail: 0.1, missile: 0.08, zap: 0.1, stasis: 0.18, explosion: 0.07,
+  gun: 0.045, mortar: 0.12, rail: 0.1, railHeavy: 0.1, missile: 0.08, zap: 0.1, stasis: 0.18, explosion: 0.07,
   shieldHit: 0.07, shieldBreak: 0.1, squelch: 0.06, squelchBig: 0.2, clank: 0.06, clankBig: 0.2,
   leak: 0.5, klaxon: 1, chime: 0.5, victory: 2, defeat: 2, build: 0.05, upgrade: 0.05, sell: 0.05, siren: 2,
   ready: 0.3, minePlant: 0.05, mineTrigger: 0.08, telegraph: 0.5, lanceBoom: 0.5, lanceHum: 0.1,
@@ -108,6 +108,15 @@ const VOICES: Readonly<Record<SoundId, Voice>> = {
     osc(ac, 'sine', 70, 40, t, 0.25, env(ac, out, t, 0.6, 0.002, 0.25));
     noise(ac, nb, t + 0.02, 0.45, env(ac, out, t + 0.02, 0.12, 0.01, 0.42), 'bandpass', 5000, 1500, 3);
     return 0.48;
+  },
+  // Longshot L3: the rail crack plus a sub punch, a bright descending zap and a long ionised sizzle
+  railHeavy: (ac, out, t, nb) => {
+    VOICES.rail(ac, out, t, nb);
+    osc(ac, 'sine', 55, 24, t, 0.55, env(ac, out, t, 0.9, 0.003, 0.55));
+    osc(ac, 'square', jit(4200, 0.04), 140, t, 0.22, lowpass(ac, env(ac, out, t, 0.14, 0.001, 0.22), t, 6000, 900, 0.22));
+    noise(ac, nb, t, 0.06, env(ac, out, t, 0.6, 0.001, 0.06), 'bandpass', 1800, 600, 1.5);
+    noise(ac, nb, t + 0.05, 0.85, env(ac, out, t + 0.05, 0.1, 0.03, 0.8), 'bandpass', 7000, 2500, 5);
+    return 0.9;
   },
   missile: (ac, out, t, nb) => {
     noise(ac, nb, t, 0.45, env(ac, out, t, 0.45, 0.06, 0.38), 'bandpass', 350, jit(2600, 0.15), 2);
@@ -319,6 +328,7 @@ export function createSfx(): Sfx {
   let noiseBuf: AudioBuffer | null = null;
   let muted = false;
   const last = new Map<SoundId, number>();
+  const level3 = new Set<number>(); // tower ids at L3, from upgrade/build/sell events (shot events carry no level)
   const ends: number[] = [];
 
   function unlock(): void {
@@ -355,7 +365,9 @@ export function createSfx(): Sfx {
   return {
     play(events) {
       for (const ev of events) {
-        const id = soundFor(ev);
+        if (ev.type === 'upgrade' && ev.level === 3) level3.add(ev.towerId);
+        else if (ev.type === 'build' || ev.type === 'sell') level3.delete(ev.towerId);
+        const id = ev.type === 'shot' && ev.defId === 'longshot' && level3.has(ev.towerId) ? 'railHeavy' : soundFor(ev);
         if (id) trigger(id);
       }
     },

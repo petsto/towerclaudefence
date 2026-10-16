@@ -87,6 +87,14 @@ function enemyHeight(defId: EnemyId | undefined): number {
 }
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 const BEAM_H = 16; // Lance column height (world units): runs off the top of the view
+const RAIL_CHARGE = 0.6; // s before an L3 railgun shot that its muzzle starts gathering charge
+/** L3 rail beam as parallel fat lines (one line is ~3 px): [lateral, vertical offset, colour, life, jitter]. */
+const RAIL3_LINES: readonly (readonly [number, number, THREE.Color, number, number])[] = [
+  [0, 0, COL.white, 0.38, 0], [0, 0.012, COL.white, 0.32, 0], [0, -0.012, COL.white, 0.32, 0], // white-hot core
+  [0.022, 0.02, COL.blue, 0.45, 0.015], [-0.022, -0.02, COL.blue, 0.45, 0.015], // crackling sheath
+  [0.022, -0.02, COL.shield, 0.4, 0.015], [-0.022, 0.02, COL.shield, 0.4, 0.015],
+  [0.045, 0, COL.violet, 0.28, 0.03], [-0.045, 0, COL.violet, 0.28, 0.03], // outer halo
+];
 const SCORCH_FADE = 10; // s the scorch takes to fade once the beam is gone
 
 // ---------------------------------------------------------------- particles (Points, 1 draw each)
@@ -726,6 +734,59 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
     for (let i = 0; i < 6; i++) debris.spawn(x, 0.2, z, 2.2, 0.06, i % 2 ? COL.dirt : COL.smoke, 1.2);
   }
 
+  /** Longshot L3, from the muzzle (`mz`) to (tx, ty, tz): thick white-hot beam in a crackling cyan sheath, a double
+   *  helix of charge that unwinds and drifts apart, a lingering ionised trail, muzzle flash and impact flare. */
+  function rail3(tx: number, ty: number, tz: number): void {
+    const dx = tx - mz.x, dy = ty - mz.y, dz = tz - mz.z;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    const hl = Math.hypot(dx, dz) || 1;
+    const nx = -dz / hl, nz = dx / hl; // horizontal normal; +Y is the other axis (the beam is near-horizontal)
+    for (const [lat, up, c, life, jitter] of RAIL3_LINES) {
+      const b = bolts.start(c, null, life, jitter, jitter ? 8 : 1, jitter > 0);
+      bolts.point(b, mz.x + nx * lat, mz.y + up, mz.z + nz * lat);
+      bolts.point(b, tx + nx * lat, ty + up, tz + nz * lat);
+    }
+    // double helix: 2.2 turns per tile, radius 0.11, each mote drifting outward so the coil loosens as it fades
+    const n = Math.min(64, Math.ceil(len * 8));
+    for (let i = 0; i <= n; i++) {
+      const k = i / n;
+      const x = mz.x + dx * k, y = mz.y + dy * k, z = mz.z + dz * k;
+      for (let s = 0; s < 2; s++) {
+        const a = k * len * 2.2 * Math.PI * 2 + s * Math.PI;
+        const ca = Math.cos(a), sa = Math.sin(a);
+        glow.spawn(x + nx * ca * 0.11, y + sa * 0.11, z + nz * ca * 0.11, nx * ca * 0.25, sa * 0.25, nz * ca * 0.25,
+          s ? COL.cyan : COL.ice, COL.blue, 0.08, 0.5, 0.5, 0, 2.5);
+      }
+      // ionised trail: slow-rising violet motes that hang in the air after the beam is gone
+      if (i % 2 === 0) glow.spawn(x, y, z, rand(-0.15, 0.15), rand(0.15, 0.4), rand(-0.15, 0.15), COL.ice, COL.violet, 0.09, 0.6, 1.1, 0, 1);
+    }
+    // muzzle: flash, accelerator pulse, recoil smoke
+    glow.spawn(mz.x, mz.y, mz.z, 0, 0, 0, COL.white, COL.cyan, 1.3, 0.3, 0.12, 0, 0);
+    spheres.spawn(mz.x, mz.y, mz.z, 0.05, 0.24, 0.16, COL.white, COL.ice, COL.blue);
+    dust.burst(5, mz.x, mz.y, mz.z, 0.8, COL.smoke, COL.smoke, 0.22, 0.8, -0.5, 0.9, 2);
+    // impact: flare, ground shock ring, hot sparks and shards
+    glow.spawn(tx, ty, tz, 0, 0, 0, COL.white, COL.shield, 1.0, 0.4, 0.14, 0, 0);
+    spheres.spawn(tx, ty, tz, 0.08, 0.4, 0.2, COL.white, COL.ice, COL.blue);
+    rings.spawn(tx, decalY(tx, tz), tz, 0.15, 0.75, 0.35, COL.shield, COL.blue, COL.black);
+    glow.burst(18, tx, ty, tz, 5, COL.white, COL.sparkHot, 0.08, 0.35, 8, 0.5);
+    for (let i = 0; i < 6; i++) shards.spawn(tx, ty, tz, 2.6, 0.07, i % 2 ? COL.ice : COL.blue, 0.5);
+  }
+
+  /** L3 railguns about to fire gather charge: motes stream into the muzzle and its glow swells over RAIL_CHARGE s. */
+  function railCharge(dt: number): void {
+    if (!state || dt <= 0) return;
+    for (const t of state.towers) {
+      if (t.defId !== 'longshot' || t.level !== 3 || t.targetId === null || t.cooldown > RAIL_CHARGE) continue;
+      const k = 1 - t.cooldown / RAIL_CHARGE;
+      muzzle(t);
+      glow.spawn(mz.x, mz.y, mz.z, 0, 0, 0, COL.white, COL.cyan, 0.2 + 0.55 * k * k, 0.8, 0.06, 0, 0);
+      if (Math.random() < dt * 40 * k) {
+        const ox = rand(-0.35, 0.35), oy = rand(-0.2, 0.3), oz = rand(-0.35, 0.35);
+        glow.spawn(mz.x + ox, mz.y + oy, mz.z + oz, -ox / 0.22, -oy / 0.22, -oz / 0.22, COL.ice, COL.white, 0.06, 0.3, 0.22, 0, 0);
+      }
+    }
+  }
+
   function shot(ev: Extract<SimEvent, { type: 'shot' }>, events: readonly SimEvent[]): void {
     const t = findTower(ev.towerId);
     if (!t) return;
@@ -758,6 +819,7 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
         break;
       }
       case 'longshot': {
+        if (t.level === 3) { rail3(tx, ty, tz); break; }
         glow.spawn(mz.x, mz.y, mz.z, 0, 0, 0, COL.white, COL.shield, 1.3, 0.3, 0.1, 0, 0);
         const b = bolts.start(COL.white, COL.blue, 0.32);
         bolts.point(b, mz.x, mz.y, mz.z);
@@ -1053,6 +1115,7 @@ export function createFx(scene: THREE.Scene, interp: Interp, map: MapDef): Fx {
     const dt = Math.min(rawDt, 0.1);
     time += dt;
     updatePowers(dt);
+    railCharge(dt);
     for (const q of delayed) {
       if (q.t <= 0) continue;
       q.t -= dt;

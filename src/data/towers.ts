@@ -37,8 +37,8 @@ const stasis2: TowerLevel = { ...stasis1, cost: 90, slow: 0.45, slowDuration: 2.
 const stasis3: TowerLevel = { ...stasis2, cost: 150, slow: 0.5, damage: 8, beamTargets: 3 };
 
 const longshot1: TowerLevel = { ...NONE, cost: 225, damage: 40, cooldown: 2.5, range: 5.5, executeThreshold: 0.1 };
-const longshot2: TowerLevel = { ...longshot1, cost: 130, damage: 70, range: 6 };
-const longshot3: TowerLevel = { ...longshot2, cost: 220, damage: 105, cooldown: 2.4, executeThreshold: 0.15 };
+const longshot2: TowerLevel = { ...longshot1, cost: 130, damage: 65, range: 6.5 };
+const longshot3: TowerLevel = { ...longshot2, cost: 220, damage: 105, range: 7.5, executeThreshold: 0.15 };
 
 const breacher1: TowerLevel = {
   ...NONE,

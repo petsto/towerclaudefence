@@ -2,12 +2,12 @@
 // plus buttons that fire every effect and sound on demand. Command powers run on fake mines/fields/strikes merged into
 // the state the FX and renderer see, so they work without the sim's usePower. `?mute` starts muted. Not shipped.
 import { createSfx } from '../src/audio/sfx';
-import { ENEMIES, MAPS, TOWER_LIST } from '../src/data';
+import { ENEMIES, MAPS, TOWER_LIST, TOWERS } from '../src/data';
 import type { EnemyId } from '../src/data/types';
 import { createRenderer } from '../src/render';
 import { createFx } from '../src/render/fx';
 import { POWERS } from '../src/data';
-import { FIXED_DT, type GameState, type MineState, type SimEvent, type StrikeState, type TremorFieldState } from '../src/sim';
+import { FIXED_DT, type GameState, type MineState, type SimEvent, type StrikeState, type TowerState, type TremorFieldState } from '../src/sim';
 import { competentStrategy } from '../src/sim/autoplay';
 import { createSim } from '../src/sim/game';
 
@@ -103,8 +103,40 @@ function stepFake(dt: number): void {
   }
   fake.strikes = fake.strikes.filter((s) => s.phase === 'telegraph' || s.timeLeft > 0);
 }
+// ---------------- fake L3 railgun on open ground: auto-fires at the nearest enemy in range (charge-up, beam, SFX layer)
+const RAIL = TOWERS.longshot.levels[2];
+const rail: Mut<TowerState> = {
+  id: -7, defId: 'longshot', col: 9, row: 5, level: 3, targeting: 'closest', rotation: -Math.PI / 2,
+  cooldown: RAIL.cooldown, targetId: null, totalDamage: 0, kills: 0, sellValue: 0,
+};
+let railOn = false;
+function stepRail(dt: number): void {
+  if (!railOn) return;
+  const cx = rail.col + 0.5, cy = rail.row + 0.5;
+  const d = (e: { x: number; y: number }) => Math.hypot(e.x - cx, e.y - cy);
+  const e = state.enemies.filter((x) => d(x) <= RAIL.range).sort((a, b) => d(a) - d(b))[0];
+  rail.targetId = e?.id ?? null;
+  if (e) rail.rotation = Math.atan2(e.y - cy, e.x - cx);
+  rail.cooldown = Math.max(0, rail.cooldown - dt);
+  if (e && rail.cooldown === 0) {
+    push({ type: 'shot', towerId: rail.id, defId: 'longshot', targetId: e.id });
+    rail.cooldown = RAIL.cooldown;
+  }
+}
+section('railgun L3 (fake tower at col 9 row 5)');
+btn('rail L3 auto on/off', () => {
+  railOn = !railOn;
+  if (railOn) push({ type: 'upgrade', towerId: rail.id, level: 3 }); // also tells the SFX it is L3
+});
+btn('rail L3 shot now', () => {
+  if (!railOn) { railOn = true; push({ type: 'upgrade', towerId: rail.id, level: 3 }); }
+  rail.cooldown = 0;
+  push({ type: 'shot', towerId: rail.id, defId: 'longshot', targetId: rail.targetId ?? -1 });
+  rail.cooldown = RAIL.cooldown;
+});
 const view = (): GameState => ({
   ...state,
+  towers: railOn ? [...state.towers, rail] : state.towers,
   mines: [...state.mines, ...fake.mines],
   tremorFields: [...state.tremorFields, ...fake.fields],
   strikes: [...state.strikes, ...fake.strikes],
@@ -140,6 +172,10 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
   const dt = Math.min(Math.max(0, (now - last) / 1000), 0.25);
   last = now;
+  tick(dt);
+}
+/** One frame of `dt` seconds; also `window.__step(dt)` for when the pane is hidden and rAF is throttled. */
+function tick(dt: number): void {
   if (running) acc += dt;
   for (; acc >= FIXED_DT; acc -= FIXED_DT) {
     if (steps++ % 15 === 0 && state.status === 'playing') bot(game, map);
@@ -147,13 +183,14 @@ function frame(now: number): void {
     game.step();
   }
   renderer.interp.alpha = acc / FIXED_DT;
-  if (running) stepFake(dt);
+  if (running) { stepFake(dt); stepRail(dt); }
   const s = view();
   const events = [...game.drainEvents(), ...manual.splice(0)];
   fx.handle(events, s);
   sfx.play(events);
   fx.update(running ? dt : 0);
   renderer.render(s, dt);
-  Object.assign(window, { __drawCalls: renderer.info.render.calls, __renderer: renderer, __sfx: sfx, __fx: { plant, trigger, strike } });
+  Object.assign(window, { __drawCalls: renderer.info.render.calls, __renderer: renderer, __sfx: sfx, __fx: { plant, trigger, strike }, __step: tick });
 }
+Object.assign(window, { __sfx: sfx, __step: tick });
 requestAnimationFrame(frame);
