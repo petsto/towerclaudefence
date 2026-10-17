@@ -7,13 +7,13 @@ import { badge, cap, fmtInt, h, prefersReducedMotion, rankTone } from './dom';
 import { ICON_MUTED, ICON_SOUND } from './icons';
 import { drawMapThumbnail } from './thumbnail';
 
-const GAME_TITLE = 'STEEL MERIDIAN';
 const GAME_SUBTITLE = 'Frontier Defense Command';
+const MASCOT_SRC = `${import.meta.env.BASE_URL}favicon.svg`;
 
-const LS_MAP = 'steel-meridian.map';
-const LS_DIFF = 'steel-meridian.difficulty';
-const LS_WAVE_MODE = 'steel-meridian.waveMode';
-const LS_WAVES = 'steel-meridian.waves';
+const LS_MAP = 'tower-claudefence.map';
+const LS_DIFF = 'tower-claudefence.difficulty';
+const LS_WAVE_MODE = 'tower-claudefence.waveMode';
+const LS_WAVES = 'tower-claudefence.waves';
 
 /** Pip rows are as long as the highest tier on offer (at least 4), so every card's row lines up. */
 const MAX_TIER = Math.max(4, ...MAP_LIST.map((m) => m.tier));
@@ -185,7 +185,19 @@ export function createHomeScreen(root: HTMLElement, onStart: (cfg: SimConfig) =>
     {},
     stars,
     planet,
-    h('header', 'home-title', {}, h('h1', '', {}, GAME_TITLE), h('p', '', {}, GAME_SUBTITLE)),
+    h(
+      'header',
+      'home-title',
+      {},
+      h(
+        'div',
+        'home-brand',
+        {},
+        h('img', 'home-mascot', { src: MASCOT_SRC, alt: '', width: 48, height: 48 }),
+        h('h1', '', {}, 'TOWER ', h('span', 'clau', {}, 'CLAU'), 'DEFENCE'),
+      ),
+      h('p', '', {}, GAME_SUBTITLE),
+    ),
     h(
       'main',
       'home-grid',

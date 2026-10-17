@@ -11,7 +11,7 @@ const container = document.getElementById('canvas-container')!;
 const ui = document.getElementById('ui')!;
 // App lifetime: its gesture-unlock listeners and mute state outlive individual games.
 const sfx = createSfx();
-const LS_MUTED = 'steel-meridian.muted';
+const LS_MUTED = 'tower-claudefence.muted';
 try {
   sfx.setMuted(localStorage.getItem(LS_MUTED) === '1');
 } catch {

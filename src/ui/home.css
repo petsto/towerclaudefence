@@ -62,6 +62,26 @@
   color: transparent;
   filter: drop-shadow(0 0 12px rgba(47, 140, 255, 0.45)) drop-shadow(0 2px 0 #000);
 }
+.sm-home .home-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1vw, 16px);
+}
+/* pixel mascot (public/favicon.svg, 32×32 grid): sizes stay multiples of 16 so pixels land crisp */
+.sm-home .home-mascot {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 10px rgba(47, 140, 255, 0.35)) drop-shadow(0 2px 0 #000);
+}
+/* the pun in the name: CLAU picks up the mascot's clay */
+.sm-home .home-title h1 .clau {
+  background: linear-gradient(180deg, #ffe4d2 0%, #f4a77c 40%, #c8643c 55%, #ffd0b4 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
 .sm-home .home-title p {
   margin: 10px auto 0;
   display: flex;
@@ -281,6 +301,7 @@
 @media (min-width: 1100px) and (max-height: 820px) {
   .sm-home .home-title { padding: 10px 16px 10px; }
   .sm-home .home-title h1 { font-size: clamp(28px, 3.4vw, 44px); }
+  .sm-home .home-mascot { width: 32px; height: 32px; }
   .sm-home .home-title p { margin-top: 6px; }
   .sm-home .home-hint { display: none; }
   .sm-home .home-brief { gap: 8px; padding: 12px 16px; }
@@ -321,7 +342,9 @@
 
 /* ---------- phone (≤640) ---------- */
 @media (max-width: 640px) {
-  .sm-home .home-title h1 { font-size: clamp(22px, 7.4vw, 34px); letter-spacing: 0.04em; }
+  .sm-home .home-title { padding-top: 52px; } /* clear the corner mute button */
+  .sm-home .home-title h1 { font-size: clamp(18px, 6vw, 34px); letter-spacing: 0.03em; }
+  .sm-home .home-mascot { width: 32px; height: 32px; }
   .sm-home .home-title p { gap: 8px; font-size: 10px; letter-spacing: 0.25em; }
   .sm-home .home-title p::before, .sm-home .home-title p::after { width: 16px; }
   .sm-home .home-grid { padding: 0 16px; gap: 16px; }
