@@ -38,6 +38,7 @@ src/audio/        WebAudio SFX driven by sim events: synthesised by default; rec
                   home-screen music loop with its own gain; mute is persisted in localStorage
 src/ui/           DOM overlays: home screen, HUD; CSS in cascade order tokens.css -> components.css -> home.css -> hud.css
                   (all imported by ui/index.ts; spec docs/design/ui-revamp.md)
+public/           static files copied as-is: favicon.svg (the pixel mascot; docs/media/logo.svg is the README lockup)
 dev/              standalone sandbox pages (see below), not shipped
 docs/             plan, architecture, design docs
 ```

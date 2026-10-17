@@ -2,7 +2,7 @@
 
 Owner: UI art director. Consumers: the P1 foundation engineer, the P2 home engineer and the P2 HUD engineer (see `docs/PLAN.md`, Stage 10).
 
-- **Reference:** `docs/design/reference/sc2-ui-states.webp`.
+- **Reference:** a private reference sheet of StarCraft II UI states, not included in the repo for copyright reasons. The hex values extracted from it are in §1.
 - **Canonical CSS:** `docs/design/ui-mockup.html`. Its `<style id="tokens">` and `<style id="components">` blocks are the source for `tokens.css` and `components.css`. Open it at `/docs/design/ui-mockup.html` under `npm run dev`.
 
 ## 0. Direction in one paragraph
@@ -227,7 +227,7 @@ Both screens and both P2 engineers share this. Class names below are final.
 ### 3.2 Desktop (≥1100 px)
 
 ```
-┌───────────────────────────────── STEEL MERIDIAN ─────────────────────────────────┐
+┌──────────────────────────────── TOWER CLAUDEFENCE ───────────────────────────────┐
 │                         ──── FRONTIER DEFENSE COMMAND ────                        │
 ├───────────────────────────────────────────────────────┬──────────────────────────┤
 │ SELECT THEATRE ─────────────────────────── 6 THEATRES │ MISSION BRIEFING ─────── │
