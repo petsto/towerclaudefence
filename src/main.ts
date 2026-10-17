@@ -1,4 +1,5 @@
 // Boot: Home -> Playing -> Home. Wires sim, renderer, FX, audio and HUD, and runs the fixed-step loop.
+import { inject } from '@vercel/analytics';
 import { createSfx } from './audio/sfx';
 import { HEAVY_ONLY_FROM, MAPS, POWERS, TOWERS } from './data';
 import type { PowerId, TowerId } from './data/types';
@@ -6,6 +7,9 @@ import { createRenderer } from './render';
 import { createFx } from './render/fx';
 import { createGame, FIXED_DT, type SimConfig, type SimEvent } from './sim';
 import { createHomeScreen, createHud } from './ui';
+
+// Vercel Web Analytics: cookieless page views; only reports on Vercel deployments (debug logs in dev).
+inject();
 
 const container = document.getElementById('canvas-container')!;
 const ui = document.getElementById('ui')!;
