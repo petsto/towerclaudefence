@@ -13,7 +13,9 @@
   <img alt="Vite" src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white">
 </p>
 
-<!-- Play online: add the deployment link here once the game is hosted. -->
+<p align="center">
+  <a href="https://towerclaudefence.vercel.app/"><img alt="Play in your browser" src="https://img.shields.io/badge/%E2%96%B6%20PLAY%20IN%20YOUR%20BROWSER-towerclaudefence.vercel.app-e0804f?style=for-the-badge&labelColor=0d2236"></a>
+</p>
 
 <p align="center">
   <img src="docs/media/home.png" alt="Home screen: theatre selection, mission briefing and difficulty" width="32%">
